@@ -1,0 +1,9 @@
+.vs/
+.vscode/
+bin/
+obj/
+*.exe
+*.lib
+*.map
+*.obj
+*.pdb
