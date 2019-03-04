@@ -300,16 +300,16 @@ public:
 
     HRESULT InternalGetThumbnail(UINT cx, HBITMAP* phbmp)
     {
+        if (phbmp == NULL) {
+            return E_POINTER;
+        }
+        *phbmp = NULL;
         if (this->rsvg == NULL) {
             return E_FAIL;
         }
         if (cx - 1 >= INT_MAX) {
             return E_INVALIDARG;
         }
-        if (phbmp == NULL) {
-            return E_POINTER;
-        }
-        *phbmp = NULL;
 
         int size = static_cast<int>(cx);
         BITMAPINFO bmi = { { sizeof(BITMAPINFOHEADER), size, -size, 1, 32 } };
@@ -324,6 +324,7 @@ public:
                 HBITMAP hbmpold = SelectBitmap(hdc, hbmp);
                 rendersvg(this->rsvg, hdc, size, size, 0xffffff);
                 SelectBitmap(hdc, hbmpold);
+                DeleteDC(hdc);
             }
         }
 
