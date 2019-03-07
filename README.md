@@ -20,6 +20,8 @@ Microsoft is too lazy to provide SVG thumbnails on Windows Explorer.
 ## Todos
 - [ ] Make an installer
 - [ ] Add a viewer
+- [ ] Implement IPreviewHandler
+- [ ] Statically link dependencies
 
 ## License
 - GPL?
