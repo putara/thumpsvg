@@ -44,6 +44,13 @@ project(thumpsvg)
 
 add_library(thumpsvg SHARED thumpsvg.cpp dll.rc dll.def)
 
+set(DLLRC_DEPS
+    ${CMAKE_SOURCE_DIR}/dll.h
+    ${CMAKE_SOURCE_DIR}/res/reginst.inf
+    ${CMAKE_SOURCE_DIR}/res/manifest.xml
+)
+set_source_files_properties(dll.rc PROPERTIES OBJECT_DEPENDS "${DLLRC_DEPS}")
+
 if(MINGW)
     set_target_properties(thumpsvg PROPERTIES PREFIX "")
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s -static-libgcc")
@@ -66,15 +73,13 @@ foreach(DLL ${SVG_DLLS})
     add_custom_command(TARGET thumpsvg POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "/${MINGDIR}/bin/${DLL}.dll" $<TARGET_FILE_DIR:thumpsvg>)
 endforeach()
 
-if(0)
-    project(svgview)
-    add_executable(svgview WIN32 svgview.c)
+project(svgview)
+add_executable(svgview WIN32 svgview.cpp)
 
-    foreach(LIB ${SVG_LIBS})
-        target_link_libraries(svgview ${LIB})
-    endforeach()
+foreach(LIB ${SVG_LIBS})
+    target_link_libraries(svgview ${LIB})
+endforeach()
 
-    foreach(DLL ${SVG_DLLS})
-        add_custom_command(TARGET svgview POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "/${MINGDIR}/bin/${DLL}.dll" $<TARGET_FILE_DIR:svgview>)
-    endforeach()
-endif()
+foreach(DLL ${SVG_DLLS})
+    add_custom_command(TARGET svgview POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "/${MINGDIR}/bin/${DLL}.dll" $<TARGET_FILE_DIR:svgview>)
+endforeach()

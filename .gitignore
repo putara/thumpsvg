@@ -2,6 +2,8 @@
 .vscode/
 bin/
 obj/
+unused/
+**/build/
 *.exe
 *.lib
 *.map

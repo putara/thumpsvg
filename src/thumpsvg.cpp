@@ -7,51 +7,16 @@
 #include <advpub.h>
 #include <shlwapi.h>
 
-#include <math.h>
-#include <cairo.h>
-#include <cairo-win32.h>
-#include <rsvg.h>
-
 #include <new>
 
 #include "dll.h"
-
-#ifndef __IThumbnailProvider_FWD_DEFINED__
-#define __IThumbnailProvider_FWD_DEFINED__
-typedef interface IThumbnailProvider IThumbnailProvider;
-#endif
-
-#ifndef __IThumbnailProvider_INTERFACE_DEFINED__
-#define __IThumbnailProvider_INTERFACE_DEFINED__
-
-typedef enum WTS_ALPHATYPE {
-    WTSAT_UNKNOWN = 0,
-    WTSAT_RGB = 1,
-    WTSAT_ARGB = 2
-} WTS_ALPHATYPE;
-
-EXTERN_C const IID IID_IThumbnailProvider;
-
-#ifdef __CRT_UUID_DECL
-__CRT_UUID_DECL(IThumbnailProvider, 0xe357fccd, 0xa995, 0x4576, 0xb0, 0x1f, 0x23, 0x46, 0x30, 0x15, 0x4e, 0x96)
-#else
-const IID IID_IThumbnailProvider = { 0xe357fccd, 0xa995, 0x4576, { 0xb0, 0x1f, 0x23, 0x46, 0x30, 0x15, 0x4e, 0x96 } };
-#endif
-
-#undef INTERFACE
-#define INTERFACE IThumbnailProvider
-
-DECLARE_INTERFACE_IID_(IThumbnailProvider, IUnknown, "e357fccd-a995-4576-b01f-234630154e96")
-{
-    STDMETHOD(GetThumbnail)(THIS_ UINT cx, HBITMAP *phbmp, WTS_ALPHATYPE *pdwAlpha) PURE;
-};
-
-#endif
+#include "sdk.h"
+#include "svg.hpp"
 
 
 EXTERN_C const CLSID CLSID_ThumbProviderSVG;
 
-class DECLSPEC_NOVTABLE DllRefCount
+class DllRefCount
 {
 private:
     static volatile LONG s_cRef;
@@ -73,7 +38,8 @@ public:
 
 volatile LONG DllRefCount::s_cRef = 0;
 
-class DECLSPEC_NOVTABLE RefCount : public DllRefCount
+
+class RefCount : public DllRefCount
 {
 private:
     volatile LONG cRef;
@@ -101,141 +67,26 @@ public:
 };
 
 
-void* mmopen(const wchar_t* path, size_t* len)
-{
-    HANDLE hf, hfm;
-    void* ptr = NULL;
-    LARGE_INTEGER cb;
-    cb.QuadPart = 0;
-    hf = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    if (hf != INVALID_HANDLE_VALUE) {
-        if (GetFileSizeEx(hf, &cb) && cb.HighPart == 0) {
-            hfm = CreateFileMappingW(hf, NULL, PAGE_READONLY, 0, 0, NULL);
-            CloseHandle(hf);
-            if (hfm != NULL) {
-                ptr = MapViewOfFile(hfm, FILE_MAP_READ, 0, 0, 0);
-            }
-            CloseHandle(hfm);
-        }
-        CloseHandle(hf);
-    }
-    *len = cb.LowPart;
-    return ptr;
-}
-
-void mmclose(void* ptr)
-{
-    UnmapViewOfFile(ptr);
-}
-
-RsvgHandle* loadsvgmem(const void* ptr, size_t cb)
-{
-    GError* error = NULL;
-    return rsvg_handle_new_from_data((const guint8*)ptr, cb, &error);
-}
-
-RsvgHandle* loadsvg(const wchar_t* path)
-{
-    size_t cb;
-    void* ptr = mmopen(path, &cb);
-    if (ptr == NULL) {
-        return NULL;
-    }
-    RsvgHandle* rsvg = loadsvgmem(ptr, cb);
-    mmclose(ptr);
-    return rsvg;
-}
-
-void closesvg(RsvgHandle* rsvg)
-{
-    if (rsvg != NULL) {
-        GError* error = NULL;
-        rsvg_handle_close(rsvg, &error);
-        g_object_unref(rsvg);
-    }
-}
-
-void fill(HDC hdc, int width, int height, COLORREF bgcolour)
-{
-    COLORREF oldcolour = SetBkColor(hdc, bgcolour);
-    RECT rect = { 0, 0, width, height };
-    ExtTextOutW(hdc, 0, 0, ETO_OPAQUE, &rect, NULL, 0, NULL);
-    SetBkColor(hdc, oldcolour);
-}
-
-void rendersvg(RsvgHandle* rsvg, HDC hdc, int width, int height, COLORREF bgcolour)
-{
-    if (rsvg == NULL) {
-        fill(hdc, width, height, bgcolour);
-        return;
-    }
-    RsvgDimensionData dimensions = {};
-    rsvg_handle_get_dimensions(rsvg, &dimensions);
-    int org_width = dimensions.width;
-    int org_height = dimensions.height;
-    if ((org_width | org_height) == 0) {
-        fill(hdc, width, height, bgcolour);
-        return;
-    }
-    cairo_surface_t* surface = cairo_win32_surface_create_with_ddb(hdc, CAIRO_FORMAT_RGB24, width, height);
-    if (surface == NULL) {
-        fill(hdc, width, height, bgcolour);
-        return;
-    }
-    cairo_t* cr = cairo_create(surface);
-    if (cr != NULL) {
-        cairo_set_source_rgb(cr,
-            GetRValue(bgcolour) / 255.0,
-            GetGValue(bgcolour) / 255.0,
-            GetBValue(bgcolour) / 255.0);
-        cairo_rectangle(cr, 0, 0, width, height);
-        cairo_fill(cr);
-        double x_scale = 1, y_scale = 1;
-        if (org_width > width) {
-            x_scale = (double)width  / org_width;
-        }
-        if (org_height > height) {
-            y_scale = (double)height / org_height;
-        }
-        double scale = x_scale < y_scale ? x_scale : y_scale;
-        int new_width  = (int)floor(scale * org_width);
-        int new_height = (int)floor(scale * org_height);
-        cairo_matrix_t mat = {};
-        mat.yy = mat.xx = scale;
-        mat.x0 = (width - new_width) / 2;
-        mat.y0 = (height - new_height) / 2;
-        cairo_transform(cr, &mat);
-        rsvg_handle_render_cairo(rsvg, cr);
-        cairo_destroy(cr);
-    }
-    cairo_surface_flush(surface);
-    BitBlt(hdc, 0, 0, width, height, cairo_win32_surface_get_dc(surface), 0, 0, SRCCOPY);
-    cairo_surface_destroy(surface);
-}
-
-
 class ThumbProviderSVG : public IInitializeWithFile, public IInitializeWithStream, public IThumbnailProvider
 {
 private:
     RefCount ref;
-    RsvgHandle* rsvg;
+    Svg svg;
 
-    void close()
+    static const size_t MAX_SVG_SIZE = 32U << 20;
+
+    void Close()
     {
-        if (this->rsvg != NULL) {
-            closesvg(this->rsvg);
-            this->rsvg = NULL;
-        }
+        this->svg.Close();
     }
 
 public:
     ThumbProviderSVG()
-        : rsvg()
     {
     }
     ~ThumbProviderSVG()
     {
-        this->close();
+        this->Close();
     }
 
     // IUnknown
@@ -266,24 +117,30 @@ public:
     // IInitializeWithFile
     IFACEMETHODIMP Initialize(LPCWSTR pszFilePath, DWORD grfMode)
     {
-        this->close();
-        this->rsvg = loadsvg(pszFilePath);
-        return S_OK;
+        this->Close();
+        return this->svg.Load(pszFilePath);
     }
 
     // IInitializeWithStream
     IFACEMETHODIMP Initialize(IStream* pstm, DWORD grfMode)
     {
-        this->close();
+        this->Close();
         STATSTG stat;
         HRESULT hr = pstm->Stat(&stat, STATFLAG_NONAME);
-        if (SUCCEEDED(hr) && stat.cbSize.QuadPart < (32U << 20)) {
-            void* ptr = ::calloc(1, stat.cbSize.LowPart);
-            if (ptr != NULL) {
-                pstm->Read(ptr, stat.cbSize.LowPart, NULL);
-                this->rsvg = loadsvgmem(ptr, stat.cbSize.LowPart);
-                ::free(ptr);
+        if (SUCCEEDED(hr)) {
+            hr = stat.cbSize.QuadPart <= MAX_SVG_SIZE ? S_OK : E_FAIL;
+        }
+        if (SUCCEEDED(hr)) {
+            ULONG size = stat.cbSize.LowPart;
+            void* ptr = ::calloc(1, size);
+            hr = ptr != NULL ? S_OK : E_OUTOFMEMORY;
+            if (SUCCEEDED(hr)) {
+                hr = pstm->Read(ptr, size, &size);
             }
+            if (SUCCEEDED(hr)) {
+                hr = this->svg.Load(ptr, size);
+            }
+            ::free(ptr);
         }
         return hr;
     }
@@ -292,8 +149,7 @@ public:
     IFACEMETHODIMP GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdwAlpha)
     {
         if (pdwAlpha != NULL) {
-            // TODO: support WTSAT_ARGB
-            *pdwAlpha = WTSAT_RGB;
+            *pdwAlpha = WTSAT_ARGB;
         }
         return InternalGetThumbnail(cx, phbmp);
     }
@@ -304,32 +160,11 @@ public:
             return E_POINTER;
         }
         *phbmp = NULL;
-        if (this->rsvg == NULL) {
-            return E_FAIL;
-        }
         if (cx - 1 >= INT_MAX) {
             return E_INVALIDARG;
         }
-
-        int size = static_cast<int>(cx);
-        BITMAPINFO bmi = { { sizeof(BITMAPINFOHEADER), size, -size, 1, 32 } };
-        HBITMAP hbmp = ::CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, NULL, NULL, 0);
-        if (hbmp == NULL) {
-            return E_OUTOFMEMORY;
-        }
-
-        if (this->rsvg != NULL) {
-            HDC hdc = CreateCompatibleDC(NULL);
-            if (hdc != NULL) {
-                HBITMAP hbmpold = SelectBitmap(hdc, hbmp);
-                rendersvg(this->rsvg, hdc, size, size, 0xffffff);
-                SelectBitmap(hdc, hbmpold);
-                DeleteDC(hdc);
-            }
-        }
-
-        *phbmp = hbmp;
-        return S_OK;
+        const int size = static_cast<int>(cx);
+        return this->svg.RenderToBitmap(size, size, 0, true, phbmp);
     }
 };
 
@@ -425,7 +260,7 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv)
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
-    ClassFactory* inst = new ClassFactory();
+    ClassFactory* inst = new (std::nothrow) ClassFactory();
     if (inst == NULL) {
         return E_OUTOFMEMORY;
     }
@@ -444,7 +279,7 @@ STDAPI DllInstall(BOOL install, LPCWSTR cmdLine)
     if (::GetSystemDirectoryW(advPackPath, ARRAYSIZE(advPackPath)) == 0) {
         return E_FAIL;
     }
-    if (::PathAppendW(advPackPath, L"\\advpack.dll") == FALSE) {
+    if (::PathAppendW(advPackPath, L"advpack.dll") == FALSE) {
         return E_FAIL;
     }
 
@@ -458,7 +293,7 @@ STDAPI DllInstall(BOOL install, LPCWSTR cmdLine)
         return E_FAIL;
     }
 
-    char desc[64];
+    char desc[128];
     if (::LoadStringA(s_hinstDLL, IDS_DESC, desc, ARRAYSIZE(desc)) == 0) {
         return E_FAIL;
     }
