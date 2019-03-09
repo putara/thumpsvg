@@ -92,6 +92,7 @@ public:
             this->FreeError();
             ::rsvg_handle_close(this->rsvg, &this->error);
             ::g_object_unref(this->rsvg);
+            this->rsvg = NULL;
         }
     }
 
