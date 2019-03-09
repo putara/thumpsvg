@@ -83,3 +83,10 @@ endforeach()
 foreach(DLL ${SVG_DLLS})
     add_custom_command(TARGET svgview POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy "/${MINGDIR}/bin/${DLL}.dll" $<TARGET_FILE_DIR:svgview>)
 endforeach()
+
+project(svgtest)
+add_executable(svgtest svgtest.cpp)
+
+foreach(LIB ${SVG_LIBS})
+    target_link_libraries(svgtest ${LIB})
+endforeach()
