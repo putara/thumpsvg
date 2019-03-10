@@ -8,6 +8,7 @@
 #include <cairo-win32.h>
 #include <rsvg.h>
 
+#include "glib.hpp"
 
 const void* mmopen(const wchar_t* path, size_t* filesize)
 {
@@ -41,37 +42,17 @@ class Svg
 {
 private:
     RsvgHandle*     rsvg;
-    GError*         error;
-    GCancellable*   cancellable;
+    G::Error        error;
+    G::Cancellable  cancellable;
     int             width;
     int             height;
 
     Svg(const Svg&);
     Svg& operator =(const Svg&);
 
-    void FreeError()
-    {
-        if (this->error != NULL) {
-            ::g_error_free(this->error);
-            this->error = NULL;
-        }
-    }
-
-    void Fill(void* data, int width, int height, COLORREF colour, bool alpha) const
-    {
-        int size = width * height;
-        uint32_t* ptr = static_cast<uint32_t*>(data);
-        uint32_t x = alpha ? 0 : (((colour >> 16) & 0xff) | (colour & 0xff00) | ((colour & 0xff) << 16));
-        while (size-- > 0) {
-            *ptr++ = x;
-        }
-    }
-
 public:
     Svg()
         : rsvg()
-        , error()
-        , cancellable(::g_cancellable_new())
         , width()
         , height()
     {
@@ -80,16 +61,11 @@ public:
     ~Svg()
     {
         this->Close();
-        this->FreeError();
-        if (this->cancellable != NULL) {
-            ::g_object_unref(this->cancellable);
-        }
     }
 
     void Close()
     {
         if (this->rsvg != NULL) {
-            this->FreeError();
             ::rsvg_handle_close(this->rsvg, &this->error);
             ::g_object_unref(this->rsvg);
             this->rsvg = NULL;
@@ -103,22 +79,18 @@ public:
 
     void Cancel()
     {
-        if (this->cancellable != NULL) {
-            ::g_cancellable_cancel(this->cancellable);
-        }
+        this->cancellable.Cancel();
     }
 
     HRESULT Load(const void* ptr, size_t cb)
     {
         this->Close();
-        this->FreeError();
         //this->rsvg = ::rsvg_handle_new_from_data(static_cast<const guint8*>(ptr), cb, &this->error);
-        GInputStream* stream = ::g_memory_input_stream_new_from_data(ptr, cb, NULL);
-        if (stream == NULL) {
+        G::MemInputStream stream(ptr, cb);
+        if (stream == false) {
             return E_OUTOFMEMORY;
         }
-        this->rsvg = ::rsvg_handle_new_from_stream_sync(stream, NULL, RSVG_HANDLE_FLAGS_NONE, this->cancellable, &this->error);
-        ::g_object_unref(stream);
+        this->rsvg = ::rsvg_handle_new_from_stream_sync(stream.Get(), NULL, RSVG_HANDLE_FLAGS_NONE, this->cancellable.Get(), &this->error);
         if (this->rsvg == NULL) {
             // TODO: HresultFromGError
             return E_FAIL;
@@ -186,13 +158,17 @@ public:
                 if (hbmp != NULL) {
                     int src_stride = ::cairo_format_stride_for_width(format, width);
                     int dst_stride = width * 4;
-                    const int copysize = dst_stride < src_stride ? dst_stride : src_stride;
                     const unsigned char* src = ::cairo_image_surface_get_data(surface);
                     unsigned char* dst = static_cast<unsigned char*>(bits);
-                    while (height-- > 0) {
-                        memcpy(dst, src, copysize);
-                        dst += dst_stride;
-                        src += src_stride;
+                    if (src_stride == dst_stride) {
+                        memcpy(dst, src, dst_stride * height);
+                    } else {
+                        const int copysize = dst_stride < src_stride ? dst_stride : src_stride;
+                        while (height-- > 0) {
+                            memcpy(dst, src, copysize);
+                            dst += dst_stride;
+                            src += src_stride;
+                        }
                     }
                 }
             }

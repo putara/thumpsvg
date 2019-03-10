@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include "com.hpp"
+#include "gdi.hpp"
 #include "svg.hpp"
 
 
@@ -31,16 +33,10 @@ private:
         ::GetClientRect(hwnd, &rect);
         const int width = rect.right;
         const int height = rect.bottom;
-        HBITMAP hbmp = NULL;
-        if (SUCCEEDED(this->svg.RenderToBitmap(width, height, 0xffffff, false, &hbmp))) {
-            HDC hdc = ::CreateCompatibleDC(ps.hdc);
-            if (hdc != NULL) {
-                HBITMAP hbmOld = SelectBitmap(hdc, hbmp);
-                ::BitBlt(ps.hdc, 0, 0, width, height, hdc, 0, 0, SRCCOPY);
-                SelectBitmap(hdc, hbmOld);
-                ::DeleteDC(hdc);
-            }
-            DeleteBitmap(hbmp);
+        Bitmap bmp;
+        if (SUCCEEDED(this->svg.RenderToBitmap(width, height, 0xffffff, false, bmp.GetAddressOf()))) {
+            // TODO: Support alpha channel
+            bmp.DrawClipped(ps.hdc, 0, 0, width, height);
         }
     }
 

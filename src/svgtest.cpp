@@ -6,6 +6,8 @@
 #include <shlwapi.h>
 #include <shlobj.h>
 #include "sdk.h"
+#include "com.hpp"
+#include "gdi.hpp"
 
 #include <stdio.h>
 
@@ -27,44 +29,45 @@ HRESULT CreateBindCtxWithMode(DWORD grfMode, IBindCtx** ppbc)
 HRESULT GrabFilesAsShellItemArray(const wchar_t* dir, IShellItemArray** array)
 {
     *array = NULL;
-    IShellItem* item;
+    ComPtr<IShellItem> item;
+    ComPtr<INamespaceWalk> walk;
+    UINT cItems = 0;
+    PIDLIST_ABSOLUTE* ppidls = NULL;
+
     HRESULT hr = ::SHCreateItemFromParsingName(dir, NULL, IID_PPV_ARGS(&item));
     if (FAILED(hr)) {
         printf("SHCreateItemFromParsingName() failed with 0x%08x\n", hr);
         return hr;
     }
-    INamespaceWalk* walk = NULL;
     hr = ::CoCreateInstance(CLSID_NamespaceWalker, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&walk));
     if (SUCCEEDED(hr)) {
         hr = walk->Walk(item, NSWF_DONT_RESOLVE_LINKS | NSWF_NONE_IMPLIES_ALL | NSWF_FILESYSTEM_ONLY, MAXLONG, NULL);
         if (SUCCEEDED(hr)) {
-            UINT cItems = 0;
-            PIDLIST_ABSOLUTE* ppidls = NULL;
             hr = walk->GetIDArrayResult(&cItems, &ppidls);
             if (SUCCEEDED(hr)) {
                 hr = ::SHCreateShellItemArrayFromIDLists(cItems, const_cast<PCIDLIST_ABSOLUTE_ARRAY>(ppidls), array);
                 if (FAILED(hr)) {
                     printf("SHCreateShellItemArrayFromIDLists() failed with 0x%08x\n", hr);
                 }
-                FreeIDListArrayFull(ppidls, cItems);
             } else {
                 printf("INamespaceWalk::GetIDArrayResult() failed with 0x%08x\n", hr);
             }
         } else {
             printf("INamespaceWalk::Walk() failed with 0x%08x\n", hr);
         }
-        walk->Release();
     } else {
         printf("CoCreateInstance(CLSID_NamespaceWalker) failed with 0x%08x\n", hr);
     }
-    item->Release();
+    if (ppidls != NULL) {
+        FreeIDListArrayFull(ppidls, cItems);
+    }
     return hr;
 }
 
 HRESULT OpenStreamAsReadonly(IShellItem* item, IStream** stream)
 {
     *stream = NULL;
-    IBindCtx* ctx = NULL;
+    ComPtr<IBindCtx> ctx;
     HRESULT hr = CreateBindCtxWithMode(STGM_READ, &ctx);
     if (FAILED(hr)) {
         printf("CreateBindCtx() failed with 0x%08x\n", hr);
@@ -74,90 +77,82 @@ HRESULT OpenStreamAsReadonly(IShellItem* item, IStream** stream)
     if (FAILED(hr)) {
         printf("IShellItem::BindToHandler() failed with 0x%08x\n", hr);
     }
-    ctx->Release();
     return hr;
 }
 
 void runfile(DLLGETCLASSOBJECT dllGetClassObject, IShellItem* item, int size)
 {
-    wchar_t* path = NULL;
+    ComAutoPtr<wchar_t> path;
     HRESULT hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
     if (FAILED(hr)) {
         return;
     }
     wchar_t* ext = ::PathFindExtensionW(path);
     if (::StrCmpICW(ext, L".svg") != 0 && ::StrCmpICW(ext, L".svgz") != 0) {
-        ::CoTaskMemFree(path);
         return;
     }
-
-    IStream* stream = NULL;
+    ComPtr<IStream> stream;
     hr = OpenStreamAsReadonly(item, &stream);
     if (FAILED(hr)) {
-        ::CoTaskMemFree(path);
         return;
     }
-    IClassFactory* factory = NULL;
+    ComPtr<IClassFactory> factory;
     hr = dllGetClassObject(CLSID_ThumbProviderSVG, IID_PPV_ARGS(&factory));
     if (FAILED(hr)) {
         printf("DllGetClassObject() failed with 0x%08x\n", hr);
-        stream->Release();
-        ::CoTaskMemFree(path);
         return;
     }
-    IThumbnailProvider* thump = NULL;
+    ComPtr<IThumbnailProvider> thump;
     hr = factory->CreateInstance(NULL, IID_PPV_ARGS(&thump));
     if (SUCCEEDED(hr)) {
-        IInitializeWithStream* init = NULL;
+        ComPtr<IInitializeWithStream> init;
         hr = thump->QueryInterface(IID_PPV_ARGS(&init));
         if (SUCCEEDED(hr)) {
             hr = init->Initialize(stream, STGM_READ);
             if (SUCCEEDED(hr)) {
-                HBITMAP hbmp = NULL;
+                Bitmap bmp;
                 WTS_ALPHATYPE alpha = WTSAT_UNKNOWN;
-                hr = thump->GetThumbnail(static_cast<UINT>(size), &hbmp, &alpha);
+                hr = thump->GetThumbnail(static_cast<UINT>(size), bmp.GetAddressOf(), &alpha);
                 if (SUCCEEDED(hr)) {
-                    if (hbmp != NULL) {
-                        ::DeleteObject(hbmp);
+                    if (bmp.Get() != NULL) {
+                        printf("%S: All good!\n", path.Get());
                     } else {
-                        printf("%S: IThumbnailProvider::GetThumbnail() succeeded but hbmp = NULL\n", path);
+                        printf("%S: IThumbnailProvider::GetThumbnail() succeeded but hbmp = NULL\n", path.Get());
                     }
                     if (alpha == WTSAT_UNKNOWN) {
-                        printf("%S: IThumbnailProvider::GetThumbnail() succeeded but alpha = UNKNOWN\n", path);
+                        printf("%S: IThumbnailProvider::GetThumbnail() succeeded but alpha = UNKNOWN\n", path.Get());
                     }
                 } else {
-                    printf("%S: IThumbnailProvider::GetThumbnail() failed with 0x%08x\n", path, hr);
+                    printf("%S: IThumbnailProvider::GetThumbnail() failed with 0x%08x\n", path.Get(), hr);
                 }
             } else {
-                printf("%S: IInitializeWithStream::Initialize() failed with 0x%08x\n", path, hr);
+                printf("%S: IInitializeWithStream::Initialize() failed with 0x%08x\n", path.Get(), hr);
             }
-            init->Release();
         } else {
             printf("IThumbnailProvider::QueryInterface() failed with 0x%08x\n", hr);
         }
-        thump->Release();
     } else {
         printf("IClassFactory::CreateInstance() failed with 0x%08x\n", hr);
     }
-    factory->Release();
-    stream->Release();
-    ::CoTaskMemFree(path);
 }
 
 void run(DLLGETCLASSOBJECT dllGetClassObject, const wchar_t* dir, int size)
 {
     printf("Scanning '%S' ...\n", dir);
-    IShellItemArray* array = NULL;
+    ComPtr<IShellItemArray> array;
+    DWORD count = 0;
     HRESULT hr = GrabFilesAsShellItemArray(dir, &array);
     if (SUCCEEDED(hr)) {
-        DWORD count = 0;
-        array->GetCount(&count);
-        IShellItem* item = NULL;
-        for (DWORD i = 0; i < count && SUCCEEDED(array->GetItemAt(i, &item)); i++) {
+        hr = array->GetCount(&count);
+    }
+    if (SUCCEEDED(hr)) {
+        for (DWORD i = 0; i < count; i++) {
+            ComPtr<IShellItem> item;
+            if (FAILED(array->GetItemAt(i, &item))) {
+                break;
+            }
             runfile(dllGetClassObject, item, size);
-            item->Release();
         }
-        array->Release();
     }
 }
 
@@ -192,7 +187,7 @@ int main()
     }
 
     ::GetFullPathNameW(argc < 2 ? L"." : argv[1], ARRAYSIZE(path), path, NULL);
-    int size = argc < 3 ? 128 : ::StrToIntW(argv[1]);
+    int size = argc < 3 ? 128 : ::StrToIntW(argv[2]);
     if (size <= 0 || size > 256) {
         size = 128;
     }
