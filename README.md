@@ -19,9 +19,12 @@ Microsoft is too lazy to provide SVG thumbnails on Windows Explorer.
 
 ## Todos
 - [ ] Make an installer
-- [ ] Add a viewer
+- [ ] Add a viewer/converter
 - [ ] Implement IPreviewHandler
 - [ ] Statically link dependencies
+
+## See also
+- [svgextension](https://github.com/maphew/svg-explorer-extension/) - an SVG thumbnail provider that uses Qt instead of librsvg
 
 ## License
 - GPL?
