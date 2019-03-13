@@ -20,11 +20,10 @@ const void* mmopen(const wchar_t* path, size_t* filesize)
     if (hf != INVALID_HANDLE_VALUE) {
         if (GetFileSizeEx(hf, &cb) && cb.HighPart == 0) {
             hfm = CreateFileMappingW(hf, NULL, PAGE_READONLY, 0, 0, NULL);
-            CloseHandle(hf);
             if (hfm != NULL) {
                 ptr = MapViewOfFile(hfm, FILE_MAP_READ, 0, 0, 0);
+                CloseHandle(hfm);
             }
-            CloseHandle(hfm);
         }
         CloseHandle(hf);
     }
