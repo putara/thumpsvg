@@ -32,15 +32,24 @@ public:
     {
         this->Free();
     }
+    HBITMAP Get() const
+    {
+        return this->hbmp;
+    }
+    bool IsNull() const
+    {
+        return this->hbmp == NULL;
+    }
+    void Attach(HBITMAP hbmp)
+    {
+        this->Free();
+        this->hbmp = hbmp;
+    }
     HBITMAP Detach()
     {
         HBITMAP hbmp = this->hbmp;
         this->hbmp = NULL;
         return hbmp;
-    }
-    HBITMAP Get() const
-    {
-        return this->hbmp;
     }
     HBITMAP* GetAddressOf()
     {

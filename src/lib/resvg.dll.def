@@ -1,0 +1,18 @@
+LIBRARY resvg
+EXPORTS
+    resvg_cairo_get_node_bbox
+    resvg_cairo_render_to_canvas
+    resvg_cairo_render_to_canvas_by_id
+    resvg_cairo_render_to_image
+    resvg_destroy
+    resvg_get_image_size
+    resvg_get_image_viewbox
+    resvg_get_node_transform
+    resvg_init
+    resvg_init_log
+    resvg_init_options
+    resvg_is_image_empty
+    resvg_node_exists
+    resvg_parse_tree_from_data
+    resvg_parse_tree_from_file
+    resvg_tree_destroy
