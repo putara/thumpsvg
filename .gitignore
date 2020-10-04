@@ -1,0 +1,13 @@
+.vs/
+.vscode/
+bin/
+obj/
+unused/
+**/build/
+lib/tiny-skia-0.1.0/
+*.exe
+*.dll
+*.lib
+*.map
+*.obj
+*.pdb

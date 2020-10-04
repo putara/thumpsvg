@@ -1,0 +1,4 @@
+svgview.cpp: app.hpp bitmap.hpp brush.hpp common.h debug.hpp rebar.hpp rect.hpp status.hpp svgview.rc thumpsvg.h toolbar.hpp uistate.hpp ver.h viewer.hpp window.hpp winimpl.hpp
+svgview.rc: ver.h
+thumpsvg.cpp: bitmap.hpp brush.hpp common.h debug.hpp rect.hpp render.hpp svg.hpp svgopts.hpp thumpsvg.h thumpsvg.rc utf8str.hpp ver.h viewer.hpp viewimpl.hpp window.hpp winimpl.hpp
+thumpsvg.rc: ver.h

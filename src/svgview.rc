@@ -1,0 +1,190 @@
+// resource
+#define IDR_MAIN                128
+#define IDS_READY               129
+#define IDS_APP_VERSION         140
+#define IDS_APP_LINKS           141
+
+#define IDB_TOOLBAR16           200
+#define IDB_TOOLBAR32           201
+
+#define ID_FILE_NEW             40000
+#define ID_FILE_OPEN            40001
+#define ID_FILE_SAVE            40002
+#define ID_FILE_PROPERTIES      40003
+#define ID_FILE_EXIT            40004
+#define ID_EDIT_COPY            40005
+#define ID_HELP_ABOUT           40006
+#define ID_VIEW_TOOLBAR         40007
+#define ID_VIEW_STATUS          40008
+#define ID_VIEW_VIEWBOX         40009
+#define ID_VIEW_BBOX            40010
+#define ID_VIEW_ZOOM_FIT        40011
+#define ID_VIEW_ZOOM_ORIGINAL   40012
+#define ID_VIEW_ZOOM_CUSTOM     40013
+#define ID_VIEW_ZOOM_IN         40014
+#define ID_VIEW_ZOOM_OUT        40015
+#define ID_VIEW_REFRESH         40016
+#define ID_TOOL_OPTIONS         40017
+
+#ifdef RC_INVOKED
+
+#include <winresrc.h>
+#include "ver.h"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_NZ
+#pragma code_page(1252)
+
+IDR_MAIN MENU DISCARDABLE
+{
+    POPUP "&File"
+    {
+        MENUITEM "&New\tCtrl+N", ID_FILE_NEW
+        MENUITEM "&Open...\tCtrl+O", ID_FILE_OPEN
+        MENUITEM "Save &as...\tCtrl+S", ID_FILE_SAVE
+        MENUITEM SEPARATOR
+        MENUITEM "P&roperties", ID_FILE_PROPERTIES
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit", ID_FILE_EXIT
+    }
+    POPUP "&Edit"
+    {
+        MENUITEM "&Copy\tCtrl+C", ID_EDIT_COPY
+    }
+    POPUP "&View"
+    {
+        MENUITEM "&Toolbar", ID_VIEW_TOOLBAR
+        MENUITEM "&Status bar", ID_VIEW_STATUS
+        MENUITEM SEPARATOR
+        MENUITEM "&View box", ID_VIEW_VIEWBOX
+        MENUITEM "&Bounding box", ID_VIEW_BBOX
+        MENUITEM SEPARATOR
+        MENUITEM "&Fit in window", ID_VIEW_ZOOM_FIT
+        MENUITEM "O&riginal size", ID_VIEW_ZOOM_ORIGINAL
+        MENUITEM "&Custom zoom...", ID_VIEW_ZOOM_CUSTOM
+        MENUITEM SEPARATOR
+        MENUITEM "&Refresh\tF5", ID_VIEW_REFRESH
+    }
+    POPUP "&Tools"
+    {
+        MENUITEM "&Options...", ID_TOOL_OPTIONS
+    }
+    POPUP "&Help"
+    {
+        MENUITEM "&About SVG Viewer", ID_HELP_ABOUT
+    }
+}
+
+IDR_MAIN TOOLBAR DISCARDABLE 16, 16
+{
+    BUTTON      ID_FILE_NEW
+    BUTTON      ID_FILE_OPEN
+    BUTTON      ID_FILE_SAVE
+    SEPARATOR
+    BUTTON      ID_EDIT_COPY
+    SEPARATOR
+    BUTTON      ID_VIEW_ZOOM_FIT
+    BUTTON      ID_VIEW_ZOOM_ORIGINAL
+    BUTTON      ID_VIEW_ZOOM_IN
+    BUTTON      ID_VIEW_ZOOM_OUT
+}
+
+STRINGTABLE DISCARDABLE
+{
+    IDR_MAIN                "SVG Viewer"
+    IDS_READY               "Ready"
+    IDS_APP_VERSION         "SVG Viewer Version %u.%u.%u.%u"
+    IDS_APP_LINKS           "<a href=""home"">GitHub repo</a>\n\nPowered by <a href=""resvg"">resvg</a> and <a href=""tinyskia"">tiny-skia</a>\nToolbar icons by <a href=""fatcow"">Farm-Fresh Web Icons</a>"
+    ID_FILE_NEW             "New"
+    ID_FILE_OPEN            "Open"
+    ID_FILE_SAVE            "Save as"
+    ID_EDIT_COPY            "Copy"
+    ID_VIEW_ZOOM_FIT        "Fit in window"
+    ID_VIEW_ZOOM_ORIGINAL   "Original size"
+    ID_VIEW_ZOOM_IN         "Zoom in"
+    ID_VIEW_ZOOM_OUT        "Zoom out"
+}
+
+IDR_MAIN ACCELERATORS DISCARDABLE
+{
+    "N",            ID_FILE_NEW, VIRTKEY, CONTROL
+    "O",            ID_FILE_OPEN, VIRTKEY, CONTROL
+    "S",            ID_FILE_SAVE, VIRTKEY, CONTROL
+    "C",            ID_EDIT_COPY, VIRTKEY, CONTROL
+    "C",            ID_EDIT_COPY, VIRTKEY, CONTROL
+    VK_F5,          ID_VIEW_REFRESH, VIRTKEY
+    VK_RETURN,      ID_FILE_PROPERTIES, VIRTKEY, ALT
+}
+
+IDR_MAIN ICON DISCARDABLE "res\\app.ico"
+
+IDB_TOOLBAR16 BITMAP DISCARDABLE "res\\toolbar16.bmp"
+IDB_TOOLBAR32 BITMAP DISCARDABLE "res\\toolbar32.bmp"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST DISCARDABLE
+{
+"<assembly xmlns=""urn:schemas-microsoft-com:asm.v1"" manifestVersion=""1.0"" xmlns:asmv3=""urn:schemas-microsoft-com:asm.v3"">"
+/// *** ComCtl32.dll v6 *** ///
+"<dependency>"
+"<dependentAssembly>"
+"<assemblyIdentity type=""win32"" name=""Microsoft.Windows.Common-Controls"" version=""6.0.0.0"" processorArchitecture=""*"" publicKeyToken=""6595b64144ccf1df""/>"
+"</dependentAssembly>"
+"</dependency>"
+/// *** UAC *** ///
+"<trustInfo xmlns=""urn:schemas-microsoft-com:asm.v2"">"
+"<security>"
+"<requestedPrivileges>"
+"<requestedExecutionLevel level=""asInvoker"" uiAccess=""false""/>"
+"</requestedPrivileges>"
+"</security>"
+"</trustInfo>"
+/// *** DPI awareness *** ///
+"<asmv3:application>"
+"<asmv3:windowsSettings xmlns=""http://schemas.microsoft.com/SMI/2005/WindowsSettings"">"
+"<dpiAware>true/pm</dpiAware>"
+"<dpiAwareness xmlns=""http://schemas.microsoft.com/SMI/2016/WindowsSettings"">PerMonitorV2,PerMonitor</dpiAwareness>"
+"</asmv3:windowsSettings>"
+"</asmv3:application>"
+/// *** OS compatibility *** ///
+"<compatibility xmlns=""urn:schemas-microsoft-com:compatibility.v1"">"
+"<application>"
+// Windows Vista
+"<supportedOS Id=""{e2011457-1546-43c5-a5fe-008deee3d3f0}""/>"
+// Windows 7
+"<supportedOS Id=""{35138b9a-5d96-4fbd-8e2d-a2440225f93a}""/>"
+// Windows 8
+"<supportedOS Id=""{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}""/>"
+// Windows 8.1
+"<supportedOS Id=""{1f676c76-80e1-4239-95bb-83d0f6d0da78}""/>"
+// Windows 10
+"<supportedOS Id=""{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}""/>"
+"</application>"
+"</compatibility>"
+"</assembly>"
+}
+
+VS_VERSION_INFO VERSIONINFO DISCARDABLE
+    FILEVERSION         VER_NUMBER
+    PRODUCTVERSION      VER_NUMBER
+#ifdef _DEBUG
+    FILEFLAGSMASK       VS_FF_DEBUG
+    FILEFLAGS           VS_FF_DEBUG
+#endif
+    FILEOS              VOS_NT_WINDOWS32
+    FILETYPE            VFT_APP
+{
+    BLOCK "StringFileInfo"
+    {
+        BLOCK VER_UNI_LANG_STR_ENZ
+        {
+            VALUE "FileDescription",    "SVG Viewer"
+            VALUE "LegalCopyright",     "\251 " VER_YEAR " Tatsu"
+            VALUE "ProductVersion",     VER_STRING
+        }
+    }
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", VER_TRANSLATION_ENZ
+    }
+}
+
+#endif // RC_INVOKED

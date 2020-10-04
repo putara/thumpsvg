@@ -1,0 +1,8 @@
+LIBRARY thumpsvg
+EXPORTS
+    RegisterViewerClass     @1  NONAME
+    DllCanUnloadNow             PRIVATE
+    DllGetClassObject           PRIVATE
+    DllRegisterServer           PRIVATE
+    DllUnregisterServer         PRIVATE
+    DllInstall                  PRIVATE
