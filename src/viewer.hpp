@@ -4,34 +4,34 @@
 
 #include "thumpsvg.h"
 
-#define SVGWM_FIRST             (WM_USER + 0x200)
+constexpr UINT SVGWM_FIRST             = WM_USER + 0x200;
 
-#define SVGWM_IS_LOADED         (SVGWM_FIRST + 0)
-#define SVGWM_IS_EMPTY          (SVGWM_FIRST + 1)
-#define SVGWM_GET_SIZE          (SVGWM_FIRST + 2)
-#define SVGWM_GET_VIEW_BOX      (SVGWM_FIRST + 3)
-#define SVGWM_GET_BOUNDING_BOX  (SVGWM_FIRST + 4)
-#define SVGWM_GET_OPTION        (SVGWM_FIRST + 5)
-#define SVGWM_SET_OPTION        (SVGWM_FIRST + 6)
-#define SVGWM_LOAD              (SVGWM_FIRST + 7)
-#define SVGWM_CLOSE             (SVGWM_FIRST + 8)
-#define SVGWM_EXPORT            (SVGWM_FIRST + 9)
-#define SVGWM_DPI_CHANGED       (SVGWM_FIRST + 10)
-#define SVGWM_REFRESH           (SVGWM_FIRST + 11)
+constexpr UINT SVGWM_IS_LOADED         = SVGWM_FIRST + 0;
+constexpr UINT SVGWM_IS_EMPTY          = SVGWM_FIRST + 1;
+constexpr UINT SVGWM_GET_SIZE          = SVGWM_FIRST + 2;
+constexpr UINT SVGWM_GET_VIEW_BOX      = SVGWM_FIRST + 3;
+constexpr UINT SVGWM_GET_BOUNDING_BOX  = SVGWM_FIRST + 4;
+constexpr UINT SVGWM_GET_OPTION        = SVGWM_FIRST + 5;
+constexpr UINT SVGWM_SET_OPTION        = SVGWM_FIRST + 6;
+constexpr UINT SVGWM_LOAD              = SVGWM_FIRST + 7;
+constexpr UINT SVGWM_CLOSE             = SVGWM_FIRST + 8;
+constexpr UINT SVGWM_EXPORT            = SVGWM_FIRST + 9;
+constexpr UINT SVGWM_DPI_CHANGED       = SVGWM_FIRST + 10;
+constexpr UINT SVGWM_REFRESH           = SVGWM_FIRST + 11;
 
 // SVGWM_GET_OPTION/SVGWM_SET_OPTION
-#define SVGOPT_ZOOM             1
-#define SVGOPT_VIEWBOX          2
-#define SVGOPT_BBOX             3
+constexpr UINT SVGOPT_ZOOM             = 1;
+constexpr UINT SVGOPT_VIEWBOX          = 2;
+constexpr UINT SVGOPT_BBOX             = 3;
 
 // SVGOPT_ZOOM
-#define SVGZOOM_CONTAIN         -1
-#define SVGZOOM_COVER           -2
+constexpr int SVGZOOM_CONTAIN          = -1;
+constexpr int SVGZOOM_COVER            = -2;
 
 // SVGWM_EXPORT
-#define SVGEXP_PNG              0
-#define SVGEXP_BMP              1
-#define SVGEXP_GIF              2
+constexpr UINT SVGEXP_PNG              = 0;
+constexpr UINT SVGEXP_BMP              = 1;
+constexpr UINT SVGEXP_GIF              = 2;
 
 
 struct SvgSizeU
@@ -104,12 +104,25 @@ public:
         return this->SendMessageHresult(SVGWM_EXPORT, SVGEXP_PNG, reinterpret_cast<LPARAM>(path));
     }
 
-    bool ShowViewBox(bool show)
+    HRESULT SetZoomMode(int mode)
+    {
+        if (mode < 0) {
+            return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_ZOOM, mode);
+        }
+        return E_INVALIDARG;
+    }
+
+    HRESULT SetZoomScale(UINT scale)
+    {
+        return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_ZOOM, scale);
+    }
+
+    HRESULT ShowViewBox(bool show)
     {
         return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_VIEWBOX, show);
     }
 
-    bool ShowBoundingBox(bool show)
+    HRESULT ShowBoundingBox(bool show)
     {
         return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_BBOX, show);
     }

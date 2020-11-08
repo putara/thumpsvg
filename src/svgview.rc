@@ -3,9 +3,15 @@
 #define IDS_READY               129
 #define IDS_APP_VERSION         140
 #define IDS_APP_LINKS           141
+#define IDS_DLG_FILTER_OPEN     142
+#define IDS_DLG_FILTER_SAVE     143
 
 #define IDB_TOOLBAR16           200
 #define IDB_TOOLBAR32           201
+
+#define IDD_ZOOM                300
+#define IDC_ZOOM_PERCENTAGE     1000
+#define IDC_ZOOM_SPIN           1001
 
 #define ID_FILE_NEW             40000
 #define ID_FILE_OPEN            40001
@@ -18,9 +24,11 @@
 #define ID_VIEW_STATUS          40008
 #define ID_VIEW_VIEWBOX         40009
 #define ID_VIEW_BBOX            40010
+#define ID_VIEW_ZOOM_START      40011
 #define ID_VIEW_ZOOM_FIT        40011
 #define ID_VIEW_ZOOM_ORIGINAL   40012
 #define ID_VIEW_ZOOM_CUSTOM     40013
+#define ID_VIEW_ZOOM_END        40013
 #define ID_VIEW_ZOOM_IN         40014
 #define ID_VIEW_ZOOM_OUT        40015
 #define ID_VIEW_REFRESH         40016
@@ -29,6 +37,10 @@
 #ifdef RC_INVOKED
 
 #include <winresrc.h>
+#ifndef IDC_STATIC
+#define IDC_STATIC (-1)
+#endif
+
 #include "ver.h"
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_NZ
@@ -93,7 +105,9 @@ STRINGTABLE DISCARDABLE
     IDR_MAIN                "SVG Viewer"
     IDS_READY               "Ready"
     IDS_APP_VERSION         "SVG Viewer Version %u.%u.%u.%u"
-    IDS_APP_LINKS           "<a href=""home"">GitHub repo</a>\n\nPowered by <a href=""resvg"">resvg</a> and <a href=""tinyskia"">tiny-skia</a>\nToolbar icons by <a href=""fatcow"">Farm-Fresh Web Icons</a>"
+    IDS_APP_LINKS           "<a href=""home"">GitHub repo</a>\n\nPowered by <a href=""resvg"">resvg</a> and <a href=""tinyskia"">tiny-skia</a>\nToolbar icons by <a href=""fatcow"">Farm-Fresh Web Icons</a>\nSVG logo by <a href=""w3c"">W3C</a>"
+    IDS_DLG_FILTER_OPEN     "SVG files (*.svg;*.svgz)|*.svg;*.svgz|All files|*.*|"
+    IDS_DLG_FILTER_SAVE     "PNG files (*.png)|*.png|All files|*.*|"
     ID_FILE_NEW             "New"
     ID_FILE_OPEN            "Open"
     ID_FILE_SAVE            "Save as"
@@ -115,7 +129,19 @@ IDR_MAIN ACCELERATORS DISCARDABLE
     VK_RETURN,      ID_FILE_PROPERTIES, VIRTKEY, ALT
 }
 
-IDR_MAIN ICON DISCARDABLE "res\\app.ico"
+IDD_ZOOM DIALOG 0, 0, 186, 62
+STYLE DS_SETFONT | DS_MODALFRAME | DS_3DLOOK | DS_CENTER | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+CAPTION "Custom Zoom"
+FONT 9, "Segoe UI"
+{
+    LTEXT           "Percentage &zoom:", IDC_STATIC, 7, 19, 74, 9
+    EDITTEXT        IDC_ZOOM_PERCENTAGE, 86, 16, 64, 14, ES_AUTOHSCROLL | ES_NUMBER
+    CONTROL         "", IDC_ZOOM_SPIN, "msctls_updown32", UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_NOTHOUSANDS | UDS_AUTOBUDDY | UDS_SETBUDDYINT, 140, 16, 11, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 129, 41, 50, 14
+    DEFPUSHBUTTON   "OK", IDOK, 74, 41, 50, 14
+}
+
+IDR_MAIN ICON DISCARDABLE "res\\svgview.ico"
 
 IDB_TOOLBAR16 BITMAP DISCARDABLE "res\\toolbar16.bmp"
 IDB_TOOLBAR32 BITMAP DISCARDABLE "res\\toolbar32.bmp"

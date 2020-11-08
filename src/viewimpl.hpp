@@ -13,6 +13,9 @@ private:
     Svg svg;
     Bitmap cache;
     Brush checker;
+    bool showViewBox = false;
+    bool showBBox = false;
+    int zoom = SVGZOOM_CONTAIN;
 
     SvgViewerImpl(HWND hwnd) noexcept
     {
@@ -35,7 +38,15 @@ private:
 
         SvgRenderTarget::RenderOptions opt;
         ClientRect rect(hwnd);
-        opt.SetTransparent().SetCanvasSize(rect.width(), rect.height()).SetToContain();
+        opt.SetTransparent().SetCanvasSize(rect.width(), rect.height());
+
+        if (this->zoom == SVGZOOM_CONTAIN) {
+            opt.SetToContain();
+        } else if (this->zoom == SVGZOOM_COVER) {
+            opt.SetToCover();
+        } else {
+            opt.SetScale(static_cast<float>(1 / 100.) * this->zoom);
+        }
 
         if (always) {
             this->cache.Destroy();
@@ -81,6 +92,32 @@ private:
         }
     }
 
+    HRESULT UpdateBoolValue(HWND hwnd, LPARAM value, bool* param)
+    {
+        bool oldValue = *param;
+        bool newValue = value != 0;
+        if (oldValue != newValue) {
+            *param = newValue;
+            if (this->svg.IsNull() == false) {
+                this->Invalidate(hwnd);
+            }
+        }
+        return oldValue ? S_OK : S_FALSE;
+    }
+
+    HRESULT UpdateIntValue(HWND hwnd, LPARAM value, int* param)
+    {
+        int oldValue = *param;
+        int newValue = static_cast<int>(value);
+        if (oldValue != newValue) {
+            *param = newValue;
+            if (this->svg.IsNull() == false) {
+                this->Invalidate(hwnd);
+            }
+        }
+        return oldValue ? S_OK : S_FALSE;
+    }
+
     static LRESULT LR(bool x)
     {
         return x;
@@ -120,14 +157,42 @@ public:
             int x = rect.left + (rect.width() - size.cx) / 2;
             int y = rect.top + (rect.height() - size.cy) / 2;
             this->cache.DrawClippedAlpha(hdc, x, y, size.cx, size.cy);
-            // int oldMode = ::SetROP2(hdc, R2_NOT);
-            // HPEN oldPen = SelectPen(hdc, GetStockPen(BLACK_PEN));
-            // HBRUSH oldBrush = SelectBrush(hdc, GetStockBrush(HOLLOW_BRUSH));
-            // ::Rectangle(hdc, x, y, x + size.cx, y + size.cy);
-            // SelectBrush(hdc, oldBrush);
-            // SelectPen(hdc, oldPen);
-            // ::SetROP2(hdc, oldMode);
+            if (this->showViewBox || this->showBBox) {
+                resvg_rect rrect = this->svg.GetViewBox();
+                if (rrect.width && rrect.height) {
+                    double scaleX = static_cast<double>(size.cx) / rrect.width;
+                    double scaleY = static_cast<double>(size.cy) / rrect.height;
+                    if (this->showViewBox) {
+                        DrawRectangle(hdc, RGB(255, 0, 0),
+                            x + static_cast<int>(::floor(rrect.x * scaleX)),
+                            y + static_cast<int>(::floor(rrect.y * scaleY)),
+                            static_cast<int>(::ceil(rrect.width * scaleX)),
+                            static_cast<int>(::ceil(rrect.height * scaleY)));
+                    }
+                    if (this->showBBox) {
+                        resvg_rect rrect = {};
+                        if (this->svg.GetBoundingBox(&rrect)) {
+                            DrawRectangle(hdc, RGB(0, 0, 255),
+                                x + static_cast<int>(::floor(rrect.x * scaleX)),
+                                y + static_cast<int>(::floor(rrect.y * scaleY)),
+                                static_cast<int>(::ceil(rrect.width * scaleX)) + 1,
+                                static_cast<int>(::ceil(rrect.height * scaleY)) + 1);
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    static void DrawRectangle(HDC hdc, COLORREF color, int x, int y, int width, int height)
+    {
+        HPEN oldPen = SelectPen(hdc, GetStockPen(DC_PEN));
+        HBRUSH oldBrush = SelectBrush(hdc, GetStockBrush(HOLLOW_BRUSH));
+        COLORREF oldColor = ::SetDCPenColor(hdc, color);
+        ::Rectangle(hdc, x, y, x + width, y + height);
+        ::SetDCPenColor(hdc, oldColor);
+        SelectBrush(hdc, oldBrush);
+        SelectPen(hdc, oldPen);
     }
 
     BOOL OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
@@ -383,18 +448,40 @@ public:
         return hr;
     }
 
-    HRESULT OnSvgGetOption(HWND, WPARAM wParam, LPARAM lParam)
+    HRESULT OnSvgGetOption(HWND, UINT option, LPARAM lParam)
     {
-        UNREFERENCED_PARAMETER(wParam);
+        int* uparam;
+        switch (option) {
+        case SVGOPT_ZOOM:
+            uparam = reinterpret_cast<int*>(lParam);
+            if (uparam == nullptr) {
+                return E_POINTER;
+            }
+            *uparam = this->zoom;
+            return S_OK;
+        case SVGOPT_VIEWBOX:
+            return this->showViewBox ? S_OK : S_FALSE;
+        case SVGOPT_BBOX:
+            return this->showBBox ? S_OK : S_FALSE;
+        }
         UNREFERENCED_PARAMETER(lParam);
-        return E_NOTIMPL;
+        return E_INVALIDARG;
     }
 
-    HRESULT OnSvgSetOption(HWND, WPARAM wParam, LPARAM lParam)
+    HRESULT OnSvgSetOption(HWND hwnd, UINT option, LPARAM lParam)
     {
-        UNREFERENCED_PARAMETER(wParam);
-        UNREFERENCED_PARAMETER(lParam);
-        return E_NOTIMPL;
+        switch (option) {
+        case SVGOPT_ZOOM:
+            if (lParam > 0 || lParam == SVGZOOM_CONTAIN || lParam == SVGZOOM_COVER) {
+                return this->UpdateIntValue(hwnd, lParam, &this->zoom);
+            }
+            break;
+        case SVGOPT_VIEWBOX:
+            return this->UpdateBoolValue(hwnd, lParam, &this->showViewBox);
+        case SVGOPT_BBOX:
+            return this->UpdateBoolValue(hwnd, lParam, &this->showBBox);
+        }
+        return E_INVALIDARG;
     }
 
     LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)

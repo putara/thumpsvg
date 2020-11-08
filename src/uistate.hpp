@@ -12,11 +12,15 @@ private:
         HWND hwnd = nullptr;
         bool enabled = true;
         bool checked = false;
+        UINT idRadio = 0;
+        UINT idFrom = 0;
+        UINT idTo = 0;
         UINT flags = 0;
         State* next = nullptr;
 
-        static const UINT CHECK = 1;
-        static const UINT ENABLE = 2;
+        static const UINT ENABLE = 1;
+        static const UINT CHECK = 2;
+        static const UINT RADIO = 4;
 
         State(UINT id, State* next)
         {
@@ -65,6 +69,14 @@ private:
             this->hwnd = hwnd;
         }
 
+        void Radio(UINT id, UINT idFrom, UINT idTo)
+        {
+            this->flags |= RADIO;
+            this->idRadio = id;
+            this->idFrom = idFrom;
+            this->idTo = idTo;
+        }
+
         State* Update(UIStateManager& parent)
         {
             if (this->flags & ENABLE) {
@@ -72,6 +84,9 @@ private:
             }
             if ((this->flags & CHECK) || this->hwnd != nullptr) {
                 parent.DoCheck(this->id, this->IsChecked());
+            }
+            if (this->flags & RADIO) {
+                parent.DoRadio(this->id, this->idFrom, this->idTo, this->id == this->idRadio);
             }
             this->flags = 0;
             return this->next;
@@ -131,10 +146,23 @@ private:
         }
     }
 
+    void DoRadio(UINT id, UINT idFrom, UINT idTo, bool state)
+    {
+        if (this->toolbar.IsNull() == false) {
+            this->toolbar.Check(id, state);
+        }
+        if (state) {
+            ::CheckMenuRadioItem(this->hmenu, idFrom, idTo, id, MF_BYCOMMAND);
+        }
+    }
+
     void DoUpdate()
     {
         this->KillTimer();
         for (State* state = this->stateHead; state != nullptr; state = state->Update(*this));
+        if (this->toolbar.IsNull() == false) {
+            ::UpdateWindow(this->toolbar.GetHwnd());
+        }
     }
 
     void SetTimer()
@@ -235,10 +263,19 @@ public:
         return *this;
     }
 
-    UIStateManager& Radio(UINT id, UINT idFrom, UINT idTo)
+    UIStateManager& Radio(UINT idRadio, UINT idFrom, UINT idTo)
     {
-        ::CheckMenuRadioItem(this->hmenu, idFrom, idTo, id, MF_BYCOMMAND);
-        // TODO: radio
+        bool updated = false;
+        for (UINT id = idFrom; id <= idTo; id++) {
+            State* state = State::Lookup(id, &this->stateHead);
+            if (state != nullptr) {
+                state->Radio(idRadio, idFrom, idTo);
+                updated = true;
+            }
+        }
+        if (updated) {
+            this->SetTimer();
+        }
         return *this;
     }
 
