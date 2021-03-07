@@ -10,8 +10,12 @@
 #include <strsafe.h>
 #include <pathcch.h>
 #include <wincodec.h>
+#include <propkey.h>
+#include <propvarutil.h>
 
 #include <new>
+
+#pragma comment(lib, "propsys.lib")
 
 // The WICCreateImagingFactory_Proxy function is not declared in the public SDK header
 EXTERN_C DECLSPEC_IMPORT HRESULT WINAPI WICCreateImagingFactory_Proxy(_In_ UINT SDKVersion, _Out_ IWICImagingFactory** ppIImagingFactory);
@@ -85,22 +89,34 @@ public:
 };
 
 
-class ThumbProviderSVG : public IInitializeWithFile, public IInitializeWithStream, public IThumbnailProvider, public NoThrowObject
+class ThumbProviderSVG
+    : public IInitializeWithFile
+    , public IInitializeWithStream
+    , public IThumbnailProvider
+    , public IPropertyStore
+    , public IPropertyStoreCapabilities
+    , public NoThrowObject
 {
 private:
     RefCount ref;
     Svg svg;
+    IPropertyStoreCache* cache;
 
     static const size_t MAX_SVG_SIZE = 32U << 20;
 
     void Destroy() noexcept
     {
         this->svg.Destroy();
+        if (this->cache != nullptr) {
+            this->cache->Release();
+            this->cache = nullptr;
+        }
     }
 
 public:
     ThumbProviderSVG() noexcept
     {
+        this->cache = nullptr;
     }
 
     ~ThumbProviderSVG() noexcept
@@ -116,6 +132,8 @@ public:
             QITABENT(ThumbProviderSVG, IThumbnailProvider),
             QITABENT(ThumbProviderSVG, IInitializeWithFile),
             QITABENT(ThumbProviderSVG, IInitializeWithStream),
+            QITABENT(ThumbProviderSVG, IPropertyStore),
+            QITABENT(ThumbProviderSVG, IPropertyStoreCapabilities),
             { 0 },
         };
         return ::QISearch(this, c_atab, riid, ppv);
@@ -172,6 +190,44 @@ public:
         return hr;
     }
 
+    HRESULT CachePropertyStore() noexcept
+    {
+        if (this->cache != nullptr) {
+            return S_OK;
+        }
+        IPropertyStoreCache* cache = nullptr;
+        HRESULT hr = ::PSCreateMemoryPropertyStore(IID_PPV_ARGS(&cache));
+        if (SUCCEEDED(hr)) {
+            auto size = this->svg.GetSize();
+            WCHAR buff[256] = {};
+            ::StringCchPrintfW(buff, ARRAYSIZE(buff), L"%u x %u", size.width, size.height);
+            PROPVARIANT propvar;
+            if (SUCCEEDED(::InitPropVariantFromString(buff, &propvar))) {
+                cache->SetValueAndState(PKEY_Image_Dimensions, &propvar, PSC_NORMAL);
+                ::PropVariantClear(&propvar);
+            }
+            if (SUCCEEDED(::InitPropVariantFromUInt32(size.width, &propvar))) {
+                cache->SetValueAndState(PKEY_Image_HorizontalSize, &propvar, PSC_NORMAL);
+                ::PropVariantClear(&propvar);
+            }
+            if (SUCCEEDED(::InitPropVariantFromUInt32(size.height, &propvar))) {
+                cache->SetValueAndState(PKEY_Image_VerticalSize, &propvar, PSC_NORMAL);
+                ::PropVariantClear(&propvar);
+            }
+            if (SUCCEEDED(::InitPropVariantFromUInt32(32, &propvar))) {
+                cache->SetValueAndState(PKEY_Image_BitDepth, &propvar, PSC_NORMAL);
+                ::PropVariantClear(&propvar);
+            }
+            if (SUCCEEDED(::InitPropVariantFromString(L"image/svg+xml", &propvar))) {
+                cache->SetValueAndState(PKEY_MIMEType, &propvar, PSC_NORMAL);
+                ::PropVariantClear(&propvar);
+            }
+            this->cache = cache;
+            cache = nullptr;
+        }
+        return hr;
+    }
+
     // IThumbnailProvider
     IFACEMETHODIMP GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* type) noexcept
     {
@@ -201,6 +257,60 @@ public:
             }
         }
         return hr;
+    }
+
+    // IPropertyStore
+    IFACEMETHODIMP STDMETHODCALLTYPE GetCount(DWORD* cProps)
+    {
+        if (cProps == nullptr) {
+            return E_INVALIDARG;
+        }
+        HRESULT hr = this->CachePropertyStore();
+        if (SUCCEEDED(hr)) {
+            hr = this->cache->GetCount(cProps);
+        }
+        return hr;
+    }
+
+    IFACEMETHODIMP STDMETHODCALLTYPE GetAt(DWORD iProp, PROPERTYKEY* pkey)
+    {
+        if (pkey == nullptr) {
+            return E_INVALIDARG;
+        }
+        HRESULT hr = this->CachePropertyStore();
+        if (SUCCEEDED(hr)) {
+            hr = this->cache->GetAt(iProp, pkey);
+        }
+        return hr;
+    }
+
+    IFACEMETHODIMP STDMETHODCALLTYPE GetValue(REFPROPERTYKEY key, PROPVARIANT* pv)
+    {
+        if (pv == nullptr) {
+            return E_INVALIDARG;
+        }
+        ::PropVariantInit(pv);
+        HRESULT hr = this->CachePropertyStore();
+        if (SUCCEEDED(hr)) {
+            hr = this->cache->GetValue(key, pv);
+        }
+        return hr;
+    }
+
+    IFACEMETHODIMP STDMETHODCALLTYPE SetValue(REFPROPERTYKEY key, REFPROPVARIANT propvar)
+    {
+        return STG_E_ACCESSDENIED;
+    }
+
+    IFACEMETHODIMP STDMETHODCALLTYPE Commit()
+    {
+        return STG_E_ACCESSDENIED;
+    }
+
+    // IPropertyStoreCapabilities
+    IFACEMETHODIMP IsPropertyWritable(REFPROPERTYKEY key)
+    {
+        return S_FALSE;
     }
 };
 
@@ -270,6 +380,32 @@ public:
 };
 
 
+bool IsBlackListed()
+{
+    HMODULE mod = ::GetModuleHandleW(nullptr);
+    if (mod == nullptr) {
+        return false;
+    }
+    bool blackListed = false;
+    DWORD cbRequired = 0;
+    auto lr = ::RegGetValueW(HKEY_CURRENT_USER, L"Software\\thumpsvg", L"BlackListedProcesses", RRF_RT_REG_MULTI_SZ | RRF_SUBKEY_WOW6464KEY, nullptr, nullptr, &cbRequired);
+    if (lr == ERROR_SUCCESS) {
+        auto data = static_cast<PZZWSTR>(::calloc((cbRequired + 1) / 2, 2));
+        if (data != nullptr) {
+            DWORD cb = cbRequired;
+            lr = ::RegGetValueW(HKEY_CURRENT_USER, L"Software\\thumpsvg", L"BlackListedProcesses", RRF_RT_REG_MULTI_SZ | RRF_ZEROONFAILURE | RRF_SUBKEY_WOW6464KEY, nullptr, data, &cbRequired);
+            if (lr == ERROR_SUCCESS) {
+                for (auto path = data; *path != L'\0' && blackListed == false; path += ::wcslen(path) + 1) {
+                    blackListed = ::GetModuleHandleW(path) == mod;
+                }
+            }
+            ::free(data);
+        }
+    }
+    return blackListed;
+}
+
+
 #define String_CLSID_ThumbProviderSVG "{C9148B50-E15E-440d-A07F-CF385EC73914}"
 
 // {C9148B50-E15E-440d-A07F-CF385EC73914}
@@ -295,6 +431,10 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv)
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
+    if (IsBlackListed()) {
+        return CLASS_E_CLASSNOTAVAILABLE;
+    }
+
     ClassFactory* inst = new ClassFactory();
     HRESULT hr = inst != nullptr ? S_OK : E_OUTOFMEMORY;
     if (SUCCEEDED(hr)) {
@@ -307,7 +447,7 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv)
 
 STDAPI DllInstall(BOOL install, LPCWSTR cmdLine)
 {
-    UNREFERENCED_PARAMETER(cmdLine);
+    bool asUser = cmdLine != nullptr && ::StrCmpIW(cmdLine, L"user") == 0;
 
     wchar_t advPackPath[MAX_PATH];
     HMODULE hmod = nullptr;
