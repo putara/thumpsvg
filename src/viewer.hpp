@@ -23,6 +23,7 @@ constexpr UINT SVGWM_REFRESH           = SVGWM_FIRST + 11;
 constexpr UINT SVGOPT_ZOOM             = 1;
 constexpr UINT SVGOPT_VIEWBOX          = 2;
 constexpr UINT SVGOPT_BBOX             = 3;
+constexpr UINT SVGOPT_SPEED            = 4;
 
 // SVGOPT_ZOOM
 constexpr int SVGZOOM_CONTAIN          = -1;
@@ -34,10 +35,10 @@ constexpr UINT SVGEXP_BMP              = 1;
 constexpr UINT SVGEXP_GIF              = 2;
 
 
-struct SvgSizeU
+struct SvgSizeF
 {
-    UINT width;
-    UINT height;
+    DOUBLE width;
+    DOUBLE height;
 };
 
 struct SvgRectF {
@@ -64,13 +65,13 @@ public:
         return this->SendMessageBool(SVGWM_IS_EMPTY);
     }
 
-    SvgSizeU GetSize() const
+    SvgSizeF GetSize() const
     {
-        SvgSizeU size = {};
+        SvgSizeF size = {};
         if (SUCCEEDED(this->SendMessageHresult(SVGWM_GET_SIZE, 0, reinterpret_cast<LPARAM>(&size)))) {
             return size;
         }
-        SvgSizeU empty = {};
+        SvgSizeF empty = {};
         return empty;
     }
 
@@ -125,6 +126,11 @@ public:
     HRESULT ShowBoundingBox(bool show)
     {
         return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_BBOX, show);
+    }
+
+    HRESULT SetSpeedOverQuality(bool enabled)
+    {
+        return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_SPEED, enabled);
     }
 
     void DpiChanged()

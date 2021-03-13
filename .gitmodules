@@ -1,23 +1,4 @@
-[submodule "lib/cairo"]
-	path = lib/cairo
-	url = https://github.com/freedesktop/cairo.git
-[submodule "lib/freetype2"]
-	path = lib/freetype2
-	url = https://github.com/freetype/freetype2.git
-[submodule "lib/libpng"]
-	path = lib/libpng
-	url = https://github.com/glennrp/libpng.git
-[submodule "lib/pixman"]
-	path = lib/pixman
-	url = https://gitlab.freedesktop.org/pixman/pixman.git
-[submodule "lib/zlib"]
-	path = lib/zlib
-	url = https://github.com/madler/zlib.git
 [submodule "lib/resvg"]
 	path = lib/resvg
-	url = https://github.com/RazrFalcon/resvg.git
-	branch = master
-[submodule "lib/resvg-cairo"]
-	path = lib/resvg-cairo
 	url = https://github.com/RazrFalcon/resvg.git
 	branch = master

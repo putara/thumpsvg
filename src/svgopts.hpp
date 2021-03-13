@@ -13,7 +13,6 @@ public:
     {
         this->opt = ::resvg_options_create();
         (*this)
-            .SetFilePath(nullptr)
             // TODO: dpi aware
             .SetDpi(96.)
             // TODO: use EnumFontFamilies()
@@ -64,11 +63,11 @@ public:
         return *this;
     }
 
-    SvgOptions& SetFilePath(LPCWSTR path) noexcept
+    SvgOptions& SetResourcesDir(LPCWSTR path) noexcept
     {
         if (this->opt != nullptr) {
             Utf8String u8path(path);
-            ::resvg_options_set_file_path(this->opt, u8path.Get());
+            ::resvg_options_set_resources_dir(this->opt, u8path.Get());
         }
         return *this;
     }
@@ -120,6 +119,20 @@ public:
     {
         if (this->opt != nullptr) {
             ::resvg_options_set_languages(this->opt, langs);
+        }
+        return *this;
+    }
+
+    SvgOptions& SetSpeedOverQuality(bool enabled) noexcept
+    {
+        if (enabled) {
+            ::resvg_options_set_shape_rendering_mode(this->opt, RESVG_SHAPE_RENDERING_OPTIMIZE_SPEED);
+            ::resvg_options_set_text_rendering_mode(this->opt, RESVG_TEXT_RENDERING_OPTIMIZE_SPEED);
+            ::resvg_options_set_image_rendering_mode(this->opt, RESVG_IMAGE_RENDERING_OPTIMIZE_SPEED);
+        } else {
+            ::resvg_options_set_shape_rendering_mode(this->opt, RESVG_SHAPE_RENDERING_GEOMETRIC_PRECISION);
+            ::resvg_options_set_text_rendering_mode(this->opt, RESVG_TEXT_RENDERING_OPTIMIZE_LEGIBILITY);
+            ::resvg_options_set_image_rendering_mode(this->opt, RESVG_IMAGE_RENDERING_OPTIMIZE_QUALITY);
         }
         return *this;
     }

@@ -76,28 +76,7 @@ if ($build) {
       throw "Clang not available"
     }
   }
-
-  $tar = (gcm tar -erroraction ignore).path
-  if (!$tar) {
-    throw "Tar not available"
-  }
-
-  $tinypatch = join-path $libdir 'tiny-skia-0.1.0\tiny.patch'
-  if (!(test-path $tinypatch)) {
-    $tarball = join-path $blddir 'tiny-skia-0.1.0.tar.gz'
-    if (!(test-path $tarball)) {
-      write-host 'Downloading tiny-skia...'
-      iwr 'https://crates.io/api/v1/crates/tiny-skia/0.1.0/download' -outfile $tarball
-    }
-    write-host 'Extracting tiny-skia...'
-    start 'tar' -a @('-xf', $tarball, '-C', $libdir) -nn -wait
-  }
 }
-
-write-host 'Patch up files...' -f green
-replace-text 'tiny-skia-0.1.0\skia\include\private\SkPathRef.h' "(#include\s+<limits>`n)" "`$1#include <tuple>`n"
-replace-text 'resvg\Cargo.toml' "(tiny-skia\s*=\s*)`"0.1`"`n" "`$1{ path = `"../tiny-skia-0.1.0`", version = `"0.1`" }`n"
-replace-text 'resvg\c-api\Cargo.toml' 'crate-type = \["cdylib"\]' 'crate-type = ["cdylib", "staticlib"]'
 
 function do-build($name, $dir = $null) {
   write-host
@@ -129,8 +108,8 @@ if (do-build 'resvg-capi' 'resvg\c-api') {
   return
 }
 
-$bldincdir = join-path $blddir 'inc\skia'
-$bldlibdir = join-path $blddir 'lib\skia'
+$bldincdir = join-path $blddir 'inc'
+$bldlibdir = join-path $blddir 'lib'
 
 write-host
 if ($clean) {

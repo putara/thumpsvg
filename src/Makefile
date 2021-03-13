@@ -6,23 +6,11 @@ BITS = 64
 ARCH = x64
 !endif
 
-!if !defined(render)
-render = ts
-!endif
-
-!if "$(render)" == "cairo"
-INCDIR = ..\build\$(BITS)\inc\cairo
-LIBDIR = ..\build\$(BITS)\lib\cairo
-OBJDIR = ..\build\$(BITS)\obj\cairo
-CDEFRT = SVG_RT_CAIRO
-SUFFIX = -cairo
-!else
-INCDIR = ..\build\$(BITS)\inc\skia
-LIBDIR = ..\build\$(BITS)\lib\skia
-OBJDIR = ..\build\$(BITS)\obj\skia
+INCDIR = ..\build\$(BITS)\inc
+LIBDIR = ..\build\$(BITS)\lib
+OBJDIR = ..\build\$(BITS)\obj
 CDEFRT = SVG_RT_SKIA
 SUFFIX =
-!endif
 
 OUTDIR = ..\bin\$(BITS)
 

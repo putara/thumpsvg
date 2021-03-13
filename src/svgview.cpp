@@ -222,7 +222,7 @@ public:
         ::StringCchPrintfW(text, ARRAYSIZE(text), L"%s - %s", fileName, title);
         ::SetWindowTextW(hwnd, text);
         auto size = this->viewer.GetSize();
-        ::StringCchPrintfW(text, ARRAYSIZE(text), L"%u x %u", size.width, size.height);
+        ::StringCchPrintfW(text, ARRAYSIZE(text), L"%g x %g", ::floor(size.width), ::floor(size.height));
         this->status.SetText(1, text);
     }
 
@@ -379,11 +379,11 @@ public:
     void OnCommandProperties(HWND hwnd)
     {
         if (this->viewer.IsLoaded()) {
-            SvgSizeU size = this->viewer.GetSize();
+            SvgSizeF size = this->viewer.GetSize();
             SvgRectF vrect = this->viewer.GetViewBox();
             wchar_t text[256];
             ::StringCchPrintfW(text, ARRAYSIZE(text),
-                L"Dimensions: %u x %u\n"
+                L"Dimensions: %g x %g\n"
                 L"View box: (%g, %g) - (%g, %g) %g x %g\n",
                 size.width, size.height,
                 vrect.x, vrect.y, vrect.x + vrect.width, vrect.y + vrect.height, vrect.width, vrect.height);

@@ -160,6 +160,7 @@ public:
         SvgOptions opt;
         // TODO: loading system fonts might be overkill
         opt.LoadSystemFonts();
+        opt.SetSpeedOverQuality(true);
         return this->svg.Load(filePath, opt);
     }
 
@@ -206,11 +207,11 @@ public:
                 cache->SetValueAndState(PKEY_Image_Dimensions, &propvar, PSC_NORMAL);
                 ::PropVariantClear(&propvar);
             }
-            if (SUCCEEDED(::InitPropVariantFromUInt32(size.width, &propvar))) {
+            if (SUCCEEDED(::InitPropVariantFromDouble(size.width, &propvar))) {
                 cache->SetValueAndState(PKEY_Image_HorizontalSize, &propvar, PSC_NORMAL);
                 ::PropVariantClear(&propvar);
             }
-            if (SUCCEEDED(::InitPropVariantFromUInt32(size.height, &propvar))) {
+            if (SUCCEEDED(::InitPropVariantFromDouble(size.height, &propvar))) {
                 cache->SetValueAndState(PKEY_Image_VerticalSize, &propvar, PSC_NORMAL);
                 ::PropVariantClear(&propvar);
             }
@@ -247,7 +248,7 @@ public:
             return E_INVALIDARG;
         }
         SvgRenderTarget::RenderOptions opt;
-        opt.SetTransparent().SetCanvasSize(cx, cx).SetToContain();
+        opt.SetCanvasSize(cx, cx).SetToContain();
         SvgRenderTarget target;
         HRESULT hr = this->svg.Render(opt, &target);
         if (SUCCEEDED(hr)) {

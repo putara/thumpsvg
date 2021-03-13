@@ -15,6 +15,7 @@ private:
     Brush checker;
     bool showViewBox = false;
     bool showBBox = false;
+    bool speedOverQuality = false;
     int zoom = SVGZOOM_CONTAIN;
 
     SvgViewerImpl(HWND hwnd) noexcept
@@ -38,7 +39,7 @@ private:
 
         SvgRenderTarget::RenderOptions opt;
         ClientRect rect(hwnd);
-        opt.SetTransparent().SetCanvasSize(rect.width(), rect.height());
+        opt.SetCanvasSize(rect.width(), rect.height());
 
         if (this->zoom == SVGZOOM_CONTAIN) {
             opt.SetToContain();
@@ -279,7 +280,7 @@ public:
         return this->svg.IsEmpty();
     }
 
-    HRESULT OnSvgGetSize(HWND hwnd, SvgSizeU* size) const
+    HRESULT OnSvgGetSize(HWND hwnd, SvgSizeF* size) const
     {
         if (size == nullptr) {
             return E_POINTER;
@@ -347,6 +348,7 @@ public:
     {
         SvgOptions opt;
         opt.LoadSystemFonts();
+        opt.SetSpeedOverQuality(this->speedOverQuality);
         HRESULT hr = this->svg.Load(path, opt);
         this->Invalidate(hwnd, true);
         return hr;
@@ -463,6 +465,8 @@ public:
             return this->showViewBox ? S_OK : S_FALSE;
         case SVGOPT_BBOX:
             return this->showBBox ? S_OK : S_FALSE;
+        case SVGOPT_SPEED:
+            return this->speedOverQuality ? S_OK : S_FALSE;
         }
         UNREFERENCED_PARAMETER(lParam);
         return E_INVALIDARG;
@@ -480,6 +484,8 @@ public:
             return this->UpdateBoolValue(hwnd, lParam, &this->showViewBox);
         case SVGOPT_BBOX:
             return this->UpdateBoolValue(hwnd, lParam, &this->showBBox);
+        case SVGOPT_SPEED:
+            return this->UpdateBoolValue(hwnd, lParam, &this->speedOverQuality);
         }
         return E_INVALIDARG;
     }
@@ -496,7 +502,7 @@ public:
         case SVGWM_IS_EMPTY:
             return LR(this->OnSvgIsEmpty(hwnd));
         case SVGWM_GET_SIZE:
-            return LR(this->OnSvgGetSize(hwnd, reinterpret_cast<SvgSizeU*>(lParam)));
+            return LR(this->OnSvgGetSize(hwnd, reinterpret_cast<SvgSizeF*>(lParam)));
         case SVGWM_GET_VIEW_BOX:
             return LR(this->OnSvgGetViewBox(hwnd, reinterpret_cast<SvgRectF*>(lParam)));
         case SVGWM_GET_BOUNDING_BOX:

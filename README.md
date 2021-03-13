@@ -16,7 +16,7 @@ Microsoft is still too lazy to natively provide SVG thumbnails on Windows Explor
 1. Install Visual Studio 2019 with Clang and CMake
 1. Install Rustup and Cargo with Visual Studio as toolchain
 1. Open command prompt on the `tools` directory
-1. Run `makelib-ts`
+1. Run `makelib`
 1. Open command prompt on the `src` directory
 1. Run `nmake`
 

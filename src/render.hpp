@@ -18,35 +18,21 @@ protected:
 
     friend class Svg;
 
-    static const COLORREF Transparent = 0xFFFFFFFFL;
-
     float scale = 1;
     FitToType type = FitToScale;
-    COLORREF bgColour = Transparent;
-    UINT width = 0;
-    UINT height = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
 
 public:
     RenderOptionsT()
     {
     }
 
-    RenderOptionsT<T>& SetBgColour(COLORREF colour)
+    RenderOptionsT<T>& SetCanvasSize(uint32_t width, uint32_t height)
     {
-        this->bgColour = colour & 0xFFFFFF;
-        return *this;
-    }
-
-    RenderOptionsT<T>& SetTransparent()
-    {
-        this->bgColour = Transparent;
-        return *this;
-    }
-
-    RenderOptionsT<T>& SetCanvasSize(UINT width, UINT height)
-    {
-        if (width > INT_MAX || height > INT_MAX) {
-            return *this;
+        if (width == 0 || height == 0 || height > (UINT_MAX / 4 / width)) {
+            width = 0;
+            height = 0;
         }
         this->width = width;
         this->height = height;
@@ -73,268 +59,58 @@ public:
     }
 };
 
-#ifdef SVG_RT_CAIRO
-class SvgRenderTargetCairo
+
+class SvgRenderTarget
 {
 private:
-    cairo_surface_t* surface = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t* pixmap = nullptr;
 
-    SvgRenderTargetCairo(cairo_surface_t* surface)
+    HRESULT Allocate(uint32_t width, uint32_t height, char** pixmapPtr)
     {
-        this->surface = surface;
-    }
-
-public:
-    class RenderOptions : public RenderOptionsT<SvgRenderTargetCairo::RenderOptions>
-    {
-    private:
-        friend class SvgRenderTargetCairo;
-
-        float CalcScaling(const resvg_render_tree* tree) const
-        {
-            float scale;
-            if (this->type == FitToScale) {
-                if (tree != nullptr && this->scale > 0 && this->scale != 1) {
-                    scale = this->scale;
-                } else {
-                    scale = 1;
-                }
-            } else {
-                if (tree == nullptr || this->width == 0 || this->height == 0) {
-                    scale = 1;
-                } else {
-                    resvg_size size = ::resvg_get_image_size(tree);
-                    if (size.width == 0 || size.height == 0) {
-                        scale = 1;
-                    } else {
-                        const float scaleX = static_cast<float>(this->width) / size.width;
-                        const float scaleY = static_cast<float>(this->height) / size.height;
-                        if (this->type == FitToContain) {
-                            if (scaleX > scaleY) {
-                                scale = scaleY;
-                            } else {
-                                scale = scaleX;
-                            }
-                        } else {
-                            if (scaleX < scaleY) {
-                                scale = scaleY;
-                            } else {
-                                scale = scaleX;
-                            }
-                        }
-                    }
-                }
-            }
-            return scale;
+        if (width == 0 || height == 0) {
+            return E_INVALIDARG;
         }
-
-    public:
-        HRESULT CalcImageSize(const resvg_render_tree* tree, UINT* width, UINT* height) const
-        {
-            float scale = this->CalcScaling(tree);
-            resvg_size size = ::resvg_get_image_size(tree);
-            *width  = static_cast<UINT>(scale * size.width);
-            *height = static_cast<UINT>(scale * size.height);
-            return S_OK;
-        }
-    };
-
-    SvgRenderTargetCairo()
-    {
-        this->surface = nullptr;
-    }
-
-    ~SvgRenderTargetCairo()
-    {
-        if (this->surface != nullptr) {
-            ::cairo_surface_destroy(this->surface);
-        }
-    }
-
-    static HRESULT Render(const resvg_render_tree* tree, const RenderOptions& opt, SvgRenderTargetCairo* target)
-    {
-        UINT width, height;
-        opt.CalcImageSize(tree, &width, &height);
-        cairo_surface_t* surface = ::cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-        cairo_t* cr = nullptr;
-        if (surface != nullptr) {
-            cr = ::cairo_create(surface);
-            if (cr != nullptr) {
-                if (opt.bgColour != RenderOptions::Transparent) {
-                    ::cairo_set_source_rgb(cr,
-                        GetRValue(opt.bgColour) / 255.0,
-                        GetGValue(opt.bgColour) / 255.0,
-                        GetBValue(opt.bgColour) / 255.0);
-                    ::cairo_rectangle(cr, 0, 0, width, height);
-                    ::cairo_fill(cr);
-                }
-                resvg_size size;
-                size.width = static_cast<uint32_t>(width);
-                size.height = static_cast<uint32_t>(height);
-                ::resvg_cairo_render_to_canvas(tree, size, cr);
-                ::cairo_destroy(cr);
-                ::cairo_surface_flush(surface);
-            } else {
-                ::cairo_surface_destroy(surface);
-                surface = nullptr;
-            }
-        }
-
-        *target = std::move(SvgRenderTargetCairo(surface));
-        return surface != nullptr ? S_OK : E_FAIL;
-    }
-
-    UINT GetWidth() const
-    {
-        if (this->surface != nullptr) {
-            return ::cairo_image_surface_get_width(this->surface);
-        }
-        return 0;
-    }
-
-    UINT GetHeight() const
-    {
-        if (this->surface != nullptr) {
-            return ::cairo_image_surface_get_width(this->surface);
-        }
-        return 0;
-    }
-
-    HRESULT ToWICBitmap(IWICImagingFactory* factory, IWICBitmapSource** pbitmap) const
-    {
-        *pbitmap = nullptr;
-        if (this->surface == nullptr) {
-            return E_FAIL;
-        }
-        const uint32_t width = this->GetWidth();
-        const uint32_t height = this->GetHeight();
-        if (width > INT_MAX || height > INT_MAX) {
+        if (width > (UINT_MAX / 4)) {
             return E_OUTOFMEMORY;
         }
-        const int stride = ::cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
-        if (stride <= 0) {
-            return E_FAIL;
-        }
-        if (static_cast<uint64_t>(stride) * height > UINT_MAX) {
+        if (height > INT_MAX || height > (UINT_MAX / 4 / width)) {
             return E_OUTOFMEMORY;
         }
-        const unsigned char* data = ::cairo_image_surface_get_data(this->surface);
-        if (data == nullptr) {
+        auto pixmap = static_cast<uint32_t*>(::calloc(height, width * 4));
+        if (pixmap == nullptr) {
             return E_OUTOFMEMORY;
         }
-        const UINT size = static_cast<UINT>(stride) * height;
-        IWICBitmap* bitmap = nullptr;
-        HRESULT hr = factory->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppPBGRA, stride, size, const_cast<BYTE*>(data), &bitmap);
-        if (SUCCEEDED(hr)) {
-            *pbitmap = bitmap;
-        }
-        return hr;
-    }
-
-    HRESULT ToGdiBitmap(bool premultiplied, HBITMAP* phbmp) const
-    {
-        *phbmp = nullptr;
-        if (this->surface == nullptr) {
-            return E_FAIL;
-        }
-        const uint32_t width = this->GetWidth();
-        const uint32_t height = this->GetHeight();
-        if (width > INT_MAX || height > INT_MAX) {
-            return E_OUTOFMEMORY;
-        }
-        const int stride = ::cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
-        if (stride <= 0) {
-            return E_FAIL;
-        }
-        const uint8_t* source = ::cairo_image_surface_get_data(this->surface);
-        if (source == nullptr) {
-            return E_OUTOFMEMORY;
-        }
-        void* bits = nullptr;
-        Bitmap32bppDIB bitmap(static_cast<int>(width), static_cast<int>(height), &bits);
-        if (bitmap.IsNull()) {
-            return E_OUTOFMEMORY;
-        }
-        size_t remains = static_cast<UINT>(stride) * height;
-        const UINT padding = static_cast<UINT>(stride) - width * 4;
-        uint32_t* destination = static_cast<uint32_t*>(bits) + width * (height - 1);
-        if (premultiplied) {
-            for (uint32_t y = 0; y < height && remains; y++) {
-                uint32_t* dst = destination;
-                for (uint32_t x = 0; x < width && remains; x++, remains--) {
-                    // TODO: SSE2
-                    *dst++ = *reinterpret_cast<const uint32_t*>(source);
-                    source += 4;
-                }
-                source += padding;
-                destination -= width;
-            }
-        } else {
-            for (uint32_t y = 0; y < height && remains; y++) {
-                uint32_t* dst = destination;
-                for (uint32_t x = 0; x < width && remains; x++, remains--) {
-                    // TODO: SSE2
-                    uint8_t b = *source++;
-                    uint8_t g = *source++;
-                    uint8_t r = *source++;
-                    uint8_t a = *source++;
-                    if (a > 0) {
-                        *dst++ = ((b * 255 + (a / 2)) / a)
-                               | (((g * 255 + (a / 2)) / a) << 8)
-                               | (((r * 255 + (a / 2)) / a) << 16)
-                               | (a << 24);
-                    } else {
-                        *dst++ = 0;
-                    }
-                }
-                source += padding;
-                destination -= width;
-            }
-        }
-        *phbmp = bitmap.Detach();
+        this->width = width;
+        this->height = height;
+        this->pixmap = pixmap;
+        *pixmapPtr = reinterpret_cast<char*>(pixmap);
         return S_OK;
     }
 
-    SvgRenderTargetCairo(SvgRenderTargetCairo&& src)
+    template <typename T>
+    static void Swap(T& x, T& y)
     {
-        this->surface = src.surface;
-        src.surface = nullptr;
+        T t;
+        t = x;
+        x = y;
+        y = t;
     }
 
-    SvgRenderTargetCairo& operator =(SvgRenderTargetCairo&& src)
+    template <typename T>
+    static inline BYTE Clamp(T x)
     {
-        auto t = this->surface;
-        this->surface = src.surface;
-        src.surface = t;
-        return *this;
-    }
-
-    SvgRenderTargetCairo(const SvgRenderTargetCairo&) = delete;
-    SvgRenderTargetCairo& operator =(const SvgRenderTargetCairo&) = delete;
-};
-
-typedef SvgRenderTargetCairo SvgRenderTarget;
-#endif
-
-
-#ifdef SVG_RT_SKIA
-class SvgRenderTargetSkia
-{
-private:
-    resvg_image* image = nullptr;
-
-    SvgRenderTargetSkia(resvg_image* image)
-    {
-        this->image = image;
+        return x < 0 ? 0 : (x > 255 ? 255 : static_cast<BYTE>(x));
     }
 
 public:
-    class RenderOptions : public RenderOptionsT<SvgRenderTargetSkia::RenderOptions>
+    class RenderOptions : public RenderOptionsT<SvgRenderTarget::RenderOptions>
     {
     private:
-        friend class SvgRenderTargetSkia;
+        friend class SvgRenderTarget;
 
-        resvg_color* ToResvgParams(const resvg_render_tree* tree, resvg_fit_to* fitTo, resvg_color* colour) const
+        void ToResvgParams(const resvg_render_tree* tree, resvg_fit_to* fitTo) const
         {
             if (this->type == FitToScale) {
                 if (tree != nullptr && this->scale > 0 && this->scale != 1) {
@@ -354,8 +130,8 @@ public:
                         fitTo->type = RESVG_FIT_TO_ORIGINAL;
                         fitTo->value = 1;
                     } else {
-                        const float scaleX = static_cast<float>(this->width) / size.width;
-                        const float scaleY = static_cast<float>(this->height) / size.height;
+                        const double scaleX = static_cast<double>(this->width) / size.width;
+                        const double scaleY = static_cast<double>(this->height) / size.height;
                         if (this->type == FitToContain) {
                             if (scaleX > scaleY) {
                                 fitTo->type = RESVG_FIT_TO_HEIGHT;
@@ -376,104 +152,89 @@ public:
                     }
                 }
             }
-            if (colour == nullptr) {
-                return nullptr;
-            }
-            if (this->bgColour == Transparent) {
-                ZeroMemory(colour, sizeof(*colour));
-                return nullptr;
-            }
-            colour->r = GetRValue(this->bgColour);
-            colour->g = GetGValue(this->bgColour);
-            colour->b = GetBValue(this->bgColour);
-            return colour;
         }
 
     public:
-        HRESULT CalcImageSize(const resvg_render_tree* tree, UINT* width, UINT* height) const
+        HRESULT CalcImageSize(const resvg_render_tree* tree, uint32_t* width, uint32_t* height, resvg_fit_to* fitTo = nullptr) const
         {
             *width = 0;
             *height = 0;
-            resvg_fit_to fitTo = {};
-            this->ToResvgParams(tree, &fitTo, nullptr);
+            resvg_fit_to fitTo_ = {};
+            if (fitTo == nullptr) {
+                fitTo = &fitTo_;
+            }
+            this->ToResvgParams(tree, fitTo);
             resvg_size size = ::resvg_get_image_size(tree);
-            if (fitTo.type == RESVG_FIT_TO_ORIGINAL) {
-                *width = size.width;
-                *height = size.height;
+            if (size.width <= 0 || size.height <= 0) {
+                return E_FAIL;
+            }
+            if (fitTo->type == RESVG_FIT_TO_ORIGINAL) {
+                *width = static_cast<uint32_t>(::floor(size.width));
+                *height = static_cast<uint32_t>(::floor(size.height));
                 return S_OK;
-            } else if (fitTo.type == RESVG_FIT_TO_ZOOM) {
-                *width = static_cast<UINT>(size.width * fitTo.value);
-                *height = static_cast<UINT>(size.height * fitTo.value);
+            } else if (fitTo->type == RESVG_FIT_TO_ZOOM) {
+                *width = static_cast<uint32_t>(::floor(size.width * fitTo->value));
+                *height = static_cast<uint32_t>(::floor(size.height * fitTo->value));
                 return S_OK;
-            } else if (fitTo.type == RESVG_FIT_TO_WIDTH) {
-                *width = static_cast<UINT>(fitTo.value);
-                *height = static_cast<UINT>(size.height * (fitTo.value / size.width));
+            } else if (fitTo->type == RESVG_FIT_TO_WIDTH) {
+                *width = this->width;
+                *height = static_cast<uint32_t>(::floor(size.height * this->width / size.width));
                 return S_OK;
-            } else if (fitTo.type == RESVG_FIT_TO_HEIGHT) {
-                *width = static_cast<UINT>(size.width * (fitTo.value / size.height));
-                *height = static_cast<UINT>(fitTo.value);
+            } else if (fitTo->type == RESVG_FIT_TO_HEIGHT) {
+                *width = static_cast<uint32_t>(::floor(size.width * this->height / size.height));
+                *height = this->height;
                 return S_OK;
             }
             return E_FAIL;
         }
     };
 
-    SvgRenderTargetSkia()
+    SvgRenderTarget()
     {
-        this->image = nullptr;
     }
 
-    ~SvgRenderTargetSkia()
+    ~SvgRenderTarget()
     {
-        if (this->image != nullptr) {
-            ::resvg_image_destroy(this->image);
-        }
+        ::free(this->pixmap);
     }
 
-    static HRESULT Render(const resvg_render_tree* tree, const RenderOptions& opt, SvgRenderTargetSkia* target)
+    static HRESULT Render(const resvg_render_tree* tree, const RenderOptions& opt, SvgRenderTarget* target)
     {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        char* pixmap = nullptr;
         resvg_fit_to fitTo = {};
-        resvg_color colour_ = {};
-        resvg_color* colour = opt.ToResvgParams(tree, &fitTo, &colour_);
-        resvg_image* image = ::resvg_render(tree, fitTo, colour);
-        *target = std::move(SvgRenderTargetSkia(image));
-        return image != nullptr ? S_OK : E_FAIL;
+        SvgRenderTarget self;
+        HRESULT hr = opt.CalcImageSize(tree, &width, &height, &fitTo);
+        if (SUCCEEDED(hr)) {
+            hr = self.Allocate(width, height, &pixmap);
+        }
+        if (SUCCEEDED(hr)) {
+            ::resvg_render(tree, fitTo, width, height, pixmap);
+            *target = std::move(self);
+        }
+        return hr;
     }
 
     UINT GetWidth() const
     {
-        if (this->image != nullptr) {
-            return ::resvg_image_get_width(this->image);
-        }
-        return 0;
+        return this->width;
     }
 
     UINT GetHeight() const
     {
-        if (this->image != nullptr) {
-            return ::resvg_image_get_height(this->image);
-        }
-        return 0;
+        return this->height;
     }
 
     HRESULT ToWICBitmap(IWICImagingFactory* factory, IWICBitmapSource** pbitmap) const
     {
         *pbitmap = nullptr;
-        if (this->image == nullptr) {
+        if (this->pixmap == nullptr) {
             return E_FAIL;
         }
-        uint32_t width = ::resvg_image_get_width(this->image);
-        uint32_t height = ::resvg_image_get_height(this->image);
-        if (width > INT_MAX || height > INT_MAX) {
-            return E_OUTOFMEMORY;
-        }
-        size_t size = 0;
-        const BYTE* data = reinterpret_cast<const BYTE*>(::resvg_image_get_data(this->image, &size));
-        if (size > UINT_MAX) {
-            return E_OUTOFMEMORY;
-        }
+        uint32_t size = this->width * 4 * this->height;
         IWICBitmap* bitmap = nullptr;
-        HRESULT hr = factory->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppRGBA, width * 4, static_cast<UINT>(size), const_cast<BYTE*>(data), &bitmap);
+        HRESULT hr = factory->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppPRGBA, this->width * 4, size, reinterpret_cast<BYTE*>(const_cast<uint32_t*>(this->pixmap)), &bitmap);
         if (SUCCEEDED(hr)) {
             *pbitmap = bitmap;
         }
@@ -483,46 +244,46 @@ public:
     HRESULT ToGdiBitmap(bool premultiplied, HBITMAP* phbmp) const
     {
         *phbmp = nullptr;
-        if (this->image == nullptr) {
+        if (this->pixmap == nullptr) {
             return E_FAIL;
         }
-        uint32_t width = ::resvg_image_get_width(this->image);
-        uint32_t height = ::resvg_image_get_height(this->image);
-        if (width > INT_MAX || height > INT_MAX) {
-            return E_OUTOFMEMORY;
-        }
+        int width = static_cast<int>(this->width);
+        int height = static_cast<int>(this->height);
         void* bits = nullptr;
-        Bitmap32bppDIB bitmap(static_cast<int>(width), static_cast<int>(height), &bits);
+        Bitmap32bppDIB bitmap(width, height, &bits);
         if (bitmap.IsNull()) {
             return E_OUTOFMEMORY;
         }
-        size_t remains = 0;
-        const uint32_t* source = reinterpret_cast<const uint32_t*>(::resvg_image_get_data(this->image, &remains));
-        uint32_t* destination = static_cast<uint32_t*>(bits) + width * (height - 1);
+        const uint32_t* source = this->pixmap;
+        uint32_t* destination = static_cast<uint32_t*>(bits) + this->width * (this->height - 1);
         if (premultiplied) {
-            for (uint32_t y = 0; y < height && remains; y++) {
+            for (int y = 0; y < height; y++) {
                 uint32_t* dst = destination;
-                for (uint32_t x = 0; x < width && remains; x++, remains--) {
+                for (int x = 0; x < width; x++) {
+                    // TODO: SSE2
+                    uint32_t src = *source++;
+                    *dst++ = (src & 0xff00ff00) | ((src & 0xff) << 16) | ((src >> 16) & 0xff);
+                }
+                destination -= width;
+            }
+        } else {
+            for (int y = 0; y < height; y++) {
+                uint32_t* dst = destination;
+                for (int x = 0; x < width; x++) {
                     // TODO: SSE2
                     uint32_t src = *source++;
                     uint8_t r = static_cast<uint8_t>(src);
                     uint8_t g = static_cast<uint8_t>(src >> 8);
                     uint8_t b = static_cast<uint8_t>(src >> 16);
                     uint8_t a = static_cast<uint8_t>(src >> 24);
-                    *dst++ = ((b * a + 128) >> 8)
-                           | (((g * a + 128) >> 8) << 8)
-                           | (((r * a + 128) >> 8) << 16)
-                           | (a << 24);
-                }
-                destination -= width;
-            }
-        } else {
-            for (uint32_t y = 0; y < height && remains; y++) {
-                uint32_t* dst = destination;
-                for (uint32_t x = 0; x < width && remains; x++, remains--) {
-                    // TODO: SSE2
-                    uint32_t src = *source++;
-                    *dst++ = (src & 0xff00ff00) | ((src & 0xff) << 16) | ((src >> 16) & 0xff);
+                    if (a == 0) {
+                        *dst++ = 0;
+                    } else {
+                        *dst++ = Clamp((b * 256 - 128) / a)
+                               | (Clamp((g * 256 - 128) / a) << 8)
+                               | (Clamp((r * 256 - 128) / a) << 16)
+                               | (a << 24);
+                    }
                 }
                 destination -= width;
             }
@@ -531,26 +292,27 @@ public:
         return S_OK;
     }
 
-    SvgRenderTargetSkia(SvgRenderTargetSkia&& src)
+    SvgRenderTarget(SvgRenderTarget&& src)
     {
-        this->image = src.image;
-        src.image = nullptr;
+        this->width = src.width;
+        this->height = src.height;
+        this->pixmap = src.pixmap;
+        src.width = 0;
+        src.height = 0;
+        src.pixmap = nullptr;
     }
 
-    SvgRenderTargetSkia& operator =(SvgRenderTargetSkia&& src)
+    SvgRenderTarget& operator =(SvgRenderTarget&& src)
     {
-        auto t = this->image;
-        this->image = src.image;
-        src.image = t;
+        Swap(this->width, src.width);
+        Swap(this->height, src.height);
+        Swap(this->pixmap, src.pixmap);
         return *this;
     }
 
-    SvgRenderTargetSkia(const SvgRenderTargetSkia&) = delete;
-    SvgRenderTargetSkia& operator =(const SvgRenderTargetSkia&) = delete;
+    SvgRenderTarget(const SvgRenderTarget&) = delete;
+    SvgRenderTarget& operator =(const SvgRenderTarget&) = delete;
 };
-
-typedef SvgRenderTargetSkia SvgRenderTarget;
-#endif
 
 
 #endif
