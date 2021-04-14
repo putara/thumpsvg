@@ -2,3 +2,6 @@
 	path = lib/resvg
 	url = https://github.com/RazrFalcon/resvg.git
 	branch = master
+[submodule "lib/zlib"]
+	path = lib/zlib
+	url = https://github.com/madler/zlib.git

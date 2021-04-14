@@ -76,7 +76,39 @@ if ($build) {
       throw "Clang not available"
     }
   }
+  $cmake = (gcm cmake.exe -erroraction ignore).path
+  if (!$cmake) {
+    $vcpath = split-path -parent ((gi 'Registry::HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\devenv.exe').getvalue('') -replace '^"|"$', '')
+    $cmake = join-path -r $vcpath 'CommonExtensions\Microsoft\CMake\CMake\bin'
+    if ($cmake -and (test-path (join-path $cmake 'cmake.exe'))) {
+      $env:Path += ";$cmake"
+    } else {
+      throw 'CMake not available'
+    }
+  }
 }
+
+<# zlib #>
+write-host
+if ($clean) {
+  write-host 'Cleaning zlib...' -f yellow
+  $zlibbuild = join-path $libdir 'zlib\build'
+  ri -r -fo $zlibbuild -erroraction ignore
+}
+if ($build) {
+  write-host 'Building zlib...' -f magenta
+  $dir = join-path $libdir 'zlib'
+  pushd $dir
+  $proc = start 'cmake' -a @('-B', 'build') -nn -wait -passthru
+  if ($proc.exitcode -eq 0) {
+    $proc = start 'cmake' -a @('--build', 'build', '--config', 'Release') -nn -wait -passthru
+  }
+  popd
+  if ($proc.exitcode -ne 0) {
+    return
+  }
+}
+<# zlib #>
 
 function do-build($name, $dir = $null) {
   write-host
@@ -126,6 +158,15 @@ if ($build) {
   $reldir = join-path $libdir 'resvg\target\release'
   deploy-files $reldir $bldlibdir @('resvg.dll.lib', 'resvg.lib')
   deploy-files $reldir $blddir @('resvg.dll', 'resvg.exe', 'resvg.pdb')
+  <# zlib #>
+  $incdir = join-path $libdir 'zlib'
+  deploy-files $incdir $bldincdir @('zlib.h')
+  $incdir = join-path $libdir 'zlib\build'
+  deploy-files $incdir $bldincdir @('zconf.h')
+  $reldir = join-path $libdir 'zlib\build\Release'
+  deploy-files $reldir $bldlibdir @('zlibstatic.lib', 'zlib.lib')
+  deploy-files $reldir $blddir @('minigzip.exe', 'example.exe', 'zlib.dll')
+  <# zlib #>
 }
 
 write-host 'Done!' -f green
