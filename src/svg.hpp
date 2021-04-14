@@ -5,22 +5,12 @@
 #include <stdint.h>
 #include <math.h>
 
-#ifdef SVG_RT_CAIRO
-#define CAIRO_WIN32_STATIC_BUILD
-#include <cairo.h>
-#include <cairo-win32.h>
-#include <resvg.h>
-#include <resvg-cairo.h>
-#pragma comment(lib, "resvg_cairo.lib")
-#pragma comment(lib, "cairo-static.lib")
-#endif
-#ifdef SVG_RT_SKIA
 #include <resvg.h>
 #pragma comment(lib, "resvg.lib")
-#endif
 
 #include "debug.hpp"
 #include "svgopts.hpp"
+#include "sans.hpp"
 
 const void* mmopen(const wchar_t* path, size_t* filesize)
 {
@@ -146,6 +136,11 @@ public:
     HRESULT Load(const void* ptr, size_t cb, const SvgOptions& opt)
     {
         this->Destroy();
+        Sanitiser sans;
+        if (opt.GetWorkaround() && sans.Run(ptr, cb)) {
+            ptr = sans.GetData();
+            cb = sans.GetSize();
+        }
         this->error = static_cast<resvg_error>(::resvg_parse_tree_from_data(static_cast<const char*>(ptr), cb, opt.GetOptions(), &this->tree));
         HRESULT hr = HresultFromKnownResvgError(this->error);
         if (SUCCEEDED(hr)) {

@@ -7,6 +7,7 @@ class SvgOptions
 {
 private:
     resvg_options* opt = nullptr;
+    bool workaround = true;
 
 public:
     SvgOptions() noexcept
@@ -140,6 +141,16 @@ public:
     resvg_options* GetOptions() const noexcept
     {
         return this->opt;
+    }
+
+    SvgOptions& SetWorkaround(bool enabled) noexcept {
+        this->workaround = enabled;
+        return *this;
+    }
+
+    bool GetWorkaround() const
+    {
+        return this->workaround;
     }
 };
 
