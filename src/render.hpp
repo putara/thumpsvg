@@ -114,38 +114,38 @@ public:
         {
             if (this->type == FitToScale) {
                 if (tree != nullptr && this->scale > 0 && this->scale != 1) {
-                    fitTo->type = RESVG_FIT_TO_ZOOM;
+                    fitTo->type = RESVG_FIT_TO_TYPE_ZOOM;
                     fitTo->value = this->scale;
                 } else {
-                    fitTo->type = RESVG_FIT_TO_ORIGINAL;
+                    fitTo->type = RESVG_FIT_TO_TYPE_ORIGINAL;
                     fitTo->value = 1;
                 }
             } else {
                 if (tree == nullptr || this->width == 0 || this->height == 0) {
-                    fitTo->type = RESVG_FIT_TO_ORIGINAL;
+                    fitTo->type = RESVG_FIT_TO_TYPE_ORIGINAL;
                     fitTo->value = 1;
                 } else {
                     resvg_size size = ::resvg_get_image_size(tree);
                     if (size.width == 0 || size.height == 0) {
-                        fitTo->type = RESVG_FIT_TO_ORIGINAL;
+                        fitTo->type = RESVG_FIT_TO_TYPE_ORIGINAL;
                         fitTo->value = 1;
                     } else {
                         const double scaleX = static_cast<double>(this->width) / size.width;
                         const double scaleY = static_cast<double>(this->height) / size.height;
                         if (this->type == FitToContain) {
                             if (scaleX > scaleY) {
-                                fitTo->type = RESVG_FIT_TO_HEIGHT;
+                                fitTo->type = RESVG_FIT_TO_TYPE_HEIGHT;
                                 fitTo->value = static_cast<float>(this->height);
                             } else {
-                                fitTo->type = RESVG_FIT_TO_WIDTH;
+                                fitTo->type = RESVG_FIT_TO_TYPE_WIDTH;
                                 fitTo->value = static_cast<float>(this->width);
                             }
                         } else {
                             if (scaleX < scaleY) {
-                                fitTo->type = RESVG_FIT_TO_HEIGHT;
+                                fitTo->type = RESVG_FIT_TO_TYPE_HEIGHT;
                                 fitTo->value = static_cast<float>(this->height);
                             } else {
-                                fitTo->type = RESVG_FIT_TO_WIDTH;
+                                fitTo->type = RESVG_FIT_TO_TYPE_WIDTH;
                                 fitTo->value = static_cast<float>(this->width);
                             }
                         }
@@ -168,19 +168,19 @@ public:
             if (size.width <= 0 || size.height <= 0) {
                 return E_FAIL;
             }
-            if (fitTo->type == RESVG_FIT_TO_ORIGINAL) {
+            if (fitTo->type == RESVG_FIT_TO_TYPE_ORIGINAL) {
                 *width = static_cast<uint32_t>(::floor(size.width));
                 *height = static_cast<uint32_t>(::floor(size.height));
                 return S_OK;
-            } else if (fitTo->type == RESVG_FIT_TO_ZOOM) {
+            } else if (fitTo->type == RESVG_FIT_TO_TYPE_ZOOM) {
                 *width = static_cast<uint32_t>(::floor(size.width * fitTo->value));
                 *height = static_cast<uint32_t>(::floor(size.height * fitTo->value));
                 return S_OK;
-            } else if (fitTo->type == RESVG_FIT_TO_WIDTH) {
+            } else if (fitTo->type == RESVG_FIT_TO_TYPE_WIDTH) {
                 *width = this->width;
                 *height = static_cast<uint32_t>(::floor(size.height * this->width / size.width));
                 return S_OK;
-            } else if (fitTo->type == RESVG_FIT_TO_HEIGHT) {
+            } else if (fitTo->type == RESVG_FIT_TO_TYPE_HEIGHT) {
                 *width = static_cast<uint32_t>(::floor(size.width * this->height / size.height));
                 *height = this->height;
                 return S_OK;
@@ -210,7 +210,8 @@ public:
             hr = self.Allocate(width, height, &pixmap);
         }
         if (SUCCEEDED(hr)) {
-            ::resvg_render(tree, fitTo, width, height, pixmap);
+            resvg_transform tx = { 1, 0, 0, 1, 0, 0 };
+            ::resvg_render(tree, fitTo, tx, width, height, pixmap);
             *target = std::move(self);
         }
         return hr;
