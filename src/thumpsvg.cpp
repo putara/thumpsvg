@@ -31,7 +31,7 @@ EXTERN_C DECLSPEC_IMPORT HRESULT WINAPI WICCreateImagingFactory_Proxy(_In_ UINT 
 #include "thumpsvg.rc"
 #include "viewimpl.hpp"
 
-EXTERN_C const CLSID CLSID_ThumbProviderSVG;
+#define TRACE(...)  Debug::Print(__VA_ARGS__)
 
 
 class DllRefCount
@@ -89,20 +89,362 @@ public:
 };
 
 
+template <class T>
+class ComBaseObject
+    : public NoThrowObject
+{
+protected:
+    static const size_t MAX_SVG_SIZE = 32U << 20;
+
+    template <typename T>
+    static void Swap(T& lhs, T& rhs) noexcept
+    {
+        T tmp = std::move(lhs);
+        lhs = std::move(rhs);
+        rhs = std::move(tmp);
+    }
+
+    struct MemData
+    {
+        void* data = nullptr;
+        ULONG size = 0;
+
+        MemData() noexcept = default;
+        MemData(MemData&& src) noexcept
+        {
+            this->data = std::exchange(src.data, nullptr);
+            this->size = std::exchange(src.size, 0);
+        }
+        ~MemData() noexcept
+        {
+            ::free(this->data);
+        }
+        HRESULT Alloc(ULONG size) noexcept
+        {
+            this->data = ::calloc(size, 1);
+            this->size = size;
+            return this->data != nullptr ? S_OK : E_OUTOFMEMORY;
+        }
+        MemData& operator =(MemData&& src) noexcept
+        {
+            Swap(this->data, src.data);
+            Swap(this->size, src.size);
+            return *this;
+        }
+    };
+
+    static HRESULT StreamReadAll(IStream* pstm, void** ppv, ULONG* pcb) noexcept
+    {
+        *ppv = nullptr;
+        *pcb = 0;
+        void* data = nullptr;
+        ULONG size = 0;
+        STATSTG stat;
+        HRESULT hr = IStream_Reset(pstm);
+        if (SUCCEEDED(hr)) {
+            hr = pstm->Stat(&stat, STATFLAG_NONAME);
+        }
+        if (SUCCEEDED(hr)) {
+            hr = stat.cbSize.QuadPart <= MAX_SVG_SIZE ? S_OK : E_FAIL;
+        }
+        if (SUCCEEDED(hr)) {
+            size = stat.cbSize.LowPart;
+            data = ::calloc(size, 1);
+            hr = data != nullptr ? S_OK : E_OUTOFMEMORY;
+        }
+        if (SUCCEEDED(hr)) {
+            hr = pstm->Read(data, size, &size);
+        }
+        if (SUCCEEDED(hr)) {
+            *ppv = data;
+            *pcb = size;
+        } else {
+            ::free(data);
+        }
+        return hr;
+    }
+
+public:
+    static LPCQITAB GetQITab() noexcept
+    {
+        static const QITAB c_atab[] = {{0}};
+        return c_atab;
+    }
+};
+
+class PreviewHandlerSVG
+    : public IInitializeWithStream
+    , public IObjectWithSite
+    , public IOleWindow
+    , public IPreviewHandler
+    , public IPreviewHandlerVisuals
+    , public ComBaseObject<PreviewHandlerSVG>
+{
+private:
+    RefCount ref;
+    SvgViewer viewer;
+    void* data;
+    ULONG size;
+    COLORREF backColour;
+    HWND hwndOwner;
+    RECT rect;
+    IUnknown* site;
+
+    void Destroy() noexcept
+    {
+        if (this->site != nullptr) {
+            this->site->Release();
+            this->site = nullptr;
+        }
+        ::free(this->data);
+        this->data = nullptr;
+        this->size = 0;
+        this->viewer.Destroy();
+    }
+
+public:
+    PreviewHandlerSVG() noexcept
+    {
+        this->data = nullptr;
+        this->size = 0;
+        this->backColour = CLR_NONE;
+        this->site = nullptr;
+        this->hwndOwner = nullptr;
+        ZeroMemory(&this->rect, sizeof(RECT));
+    }
+
+    ~PreviewHandlerSVG() noexcept
+    {
+        this->Destroy();
+    }
+
+    // IUnknown
+    STDMETHOD(QueryInterface)(REFIID riid, void** ppv) noexcept
+    {
+        static const QITAB c_atab[] =
+        {
+            QITABENT(PreviewHandlerSVG, IInitializeWithStream),
+            QITABENT(PreviewHandlerSVG, IObjectWithSite),
+            QITABENT(PreviewHandlerSVG, IOleWindow),
+            QITABENT(PreviewHandlerSVG, IPreviewHandler),
+            QITABENT(PreviewHandlerSVG, IPreviewHandlerVisuals),
+            { 0 },
+        };
+        return ::QISearch(this, c_atab, riid, ppv);
+    }
+
+    STDMETHOD_(ULONG, AddRef)() noexcept
+    {
+        return this->ref.AddRef();
+    }
+
+    STDMETHOD_(ULONG, Release)() noexcept
+    {
+        const ULONG ret = this->ref.Release();
+        if (ret == 0) {
+            delete this;
+        }
+        return ret;
+    }
+
+    // IInitializeWithStream
+    IFACEMETHODIMP Initialize(IStream* pstm, DWORD mode) noexcept
+    {
+        TRACE(__FUNCTION__ "(0x%p, %u)\n", pstm, mode);
+        this->Destroy();
+        void* data;
+        ULONG size;
+        HRESULT hr = StreamReadAll(pstm, &data, &size);
+        if (SUCCEEDED(hr)) {
+            ::free(this->data);
+            this->data = data;
+            this->size = size;
+        }
+        return hr;
+    }
+
+    // IObjectWithSite
+    IFACEMETHODIMP GetSite(REFIID riid, void** ppv)
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (ppv == nullptr) {
+            return E_INVALIDARG;
+        }
+        if (this->site == nullptr) {
+            *ppv = nullptr;
+            return E_FAIL;
+        }
+        return this->site->QueryInterface(riid, ppv);
+    }
+
+    IFACEMETHODIMP SetSite(IUnknown* site)
+    {
+        TRACE(__FUNCTION__ "(0x%p)\n", site);
+        if (this->site != nullptr) {
+            this->site->Release();
+        }
+        this->site = site;
+        if (site != nullptr) {
+            site->AddRef();
+        }
+        return S_OK;
+    }
+
+    // IOleWindow
+    IFACEMETHODIMP ContextSensitiveHelp(BOOL enterMode)
+    {
+        TRACE(__FUNCTION__ "(%s)\n", enterMode ? "true" : "false");
+        UNREFERENCED_PARAMETER(enterMode);
+        return E_NOTIMPL;
+    }
+
+    IFACEMETHODIMP GetWindow(HWND* phwnd)
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (phwnd == nullptr) {
+            return E_INVALIDARG;
+        }
+        *phwnd = this->viewer.GetHwnd();
+        if (*phwnd == nullptr) {
+            return E_FAIL;
+        }
+        return S_OK;
+    }
+
+    // IPreviewHandler
+    IFACEMETHODIMP SetWindow(HWND hwnd, const RECT* prc)
+    {
+        TRACE(__FUNCTION__ "(0x%p, {%d,%d,%d,%d})\n", hwnd, prc ? prc->left : 0, prc ? prc->top : 0, prc ? prc->right : 0, prc ? prc->bottom : 0);
+        if (hwnd == nullptr || prc == nullptr) {
+            return E_INVALIDARG;
+        }
+        if (this->viewer.GetHwnd() != nullptr) {
+            return E_FAIL;
+        }
+        this->hwndOwner = hwnd;
+        this->rect = *prc;
+        return S_OK;
+    }
+
+    IFACEMETHODIMP SetRect(const RECT* prc)
+    {
+        TRACE(__FUNCTION__ "({%d,%d,%d,%d})\n", prc ? prc->left : 0, prc ? prc->top : 0, prc ? prc->right : 0, prc ? prc->bottom : 0);
+        if (prc == nullptr) {
+            return E_INVALIDARG;
+        }
+        if (this->viewer.GetHwnd() != nullptr) {
+            ::SetWindowPos(this->viewer.GetHwnd(), nullptr, prc->left, prc->top, prc->right - prc->left, prc->bottom - prc->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        } else {
+            this->rect = *prc;
+        }
+        return S_OK;
+    }
+
+    IFACEMETHODIMP DoPreview()
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (this->viewer.GetHwnd() != nullptr) {
+            return E_FAIL;
+        }
+        if (this->data == nullptr) {
+            return E_FAIL;
+        }
+        if (this->hwndOwner == nullptr) {
+            return E_FAIL;
+        }
+        if (this->viewer.Create(1, this->hwndOwner) == false) {
+            return E_FAIL;
+        }
+        this->viewer.SetBackgroundMode(SVGBGM_SOLID);
+        this->viewer.SetBackgroundColour(this->backColour);
+        this->SetRect(&this->rect);
+        HRESULT hr = this->viewer.LoadFromMemory(this->data, this->size);
+        ::free(this->data);
+        this->data = nullptr;
+        this->size = 0;
+        if (FAILED(hr)) {
+            this->Unload();
+        }
+        return hr;
+    }
+
+    IFACEMETHODIMP Unload()
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (this->viewer.GetHwnd() == nullptr) {
+            return S_OK;
+        }
+        this->viewer.Destroy();
+        return S_OK;
+    }
+
+    IFACEMETHODIMP SetFocus()
+    {
+        TRACE(__FUNCTION__ "()\n");
+        return E_NOTIMPL;
+    }
+
+    IFACEMETHODIMP QueryFocus(HWND* phwnd)
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (phwnd == nullptr) {
+            return E_INVALIDARG;
+        }
+        return E_NOTIMPL;
+    }
+
+    IFACEMETHODIMP TranslateAccelerator(MSG* pmsg)
+    {
+        TRACE(__FUNCTION__ "()\n");
+        if (pmsg == nullptr) {
+            return E_INVALIDARG;
+        }
+        return E_NOTIMPL;
+    }
+
+    // IPreviewHandlerVisuals
+    IFACEMETHODIMP SetBackgroundColor(COLORREF color)
+    {
+        TRACE(__FUNCTION__ "(0x%08x)\n", color);
+        if (this->viewer.GetHwnd() != nullptr) {
+            this->viewer.SetBackgroundColour(color);
+        } else {
+            this->backColour = color;
+        }
+        return S_OK;
+    }
+
+    IFACEMETHODIMP SetFont(const LOGFONTW* plf)
+    {
+        TRACE(__FUNCTION__ "(0x%p)\n", plf);
+        if (plf == nullptr) {
+            return E_INVALIDARG;
+        }
+        // TODO: do something
+        return E_NOTIMPL;
+    }
+
+    IFACEMETHODIMP SetTextColor(COLORREF color)
+    {
+        TRACE(__FUNCTION__ "(0x%08x)\n", color);
+        // TODO: do something
+        UNREFERENCED_PARAMETER(color);
+        return E_NOTIMPL;
+    }
+};
+
 class ThumbProviderSVG
     : public IInitializeWithFile
     , public IInitializeWithStream
     , public IThumbnailProvider
     , public IPropertyStore
     , public IPropertyStoreCapabilities
-    , public NoThrowObject
+    , public ComBaseObject<ThumbProviderSVG>
 {
 private:
     RefCount ref;
     Svg svg;
     IPropertyStoreCache* cache;
-
-    static const size_t MAX_SVG_SIZE = 32U << 20;
 
     void Destroy() noexcept
     {
@@ -168,25 +510,14 @@ public:
     IFACEMETHODIMP Initialize(IStream* pstm, DWORD mode) noexcept
     {
         this->Destroy();
-        SvgOptions opt;
-        // TODO: loading system fonts might be overkill
-        opt.LoadSystemFonts();
-        STATSTG stat;
-        HRESULT hr = pstm->Stat(&stat, STATFLAG_NONAME);
+        void* data;
+        ULONG size;
+        HRESULT hr = StreamReadAll(pstm, &data, &size);
         if (SUCCEEDED(hr)) {
-            hr = stat.cbSize.QuadPart <= MAX_SVG_SIZE ? S_OK : E_FAIL;
-        }
-        if (SUCCEEDED(hr)) {
-            ULONG size = stat.cbSize.LowPart;
-            void* ptr = ::calloc(1, size);
-            hr = ptr != nullptr ? S_OK : E_OUTOFMEMORY;
-            if (SUCCEEDED(hr)) {
-                hr = pstm->Read(ptr, size, &size);
-            }
-            if (SUCCEEDED(hr)) {
-                hr = this->svg.Load(ptr, size, opt);
-            }
-            ::free(ptr);
+            SvgOptions opt;
+            // TODO: loading system fonts might be overkill
+            opt.LoadSystemFonts();
+            hr = this->svg.Load(data, size, opt);
         }
         return hr;
     }
@@ -316,12 +647,24 @@ public:
 };
 
 
+enum ClassType
+{
+    Class_ThumbProvider,
+    Class_PreviewHandler,
+};
+
 class ClassFactory : public IClassFactory, public NoThrowObject
 {
 private:
     RefCount ref;
+    ClassType type;
 
 public:
+    ClassFactory(ClassType type) noexcept
+        : type(type)
+    {
+    }
+
     // IUnknown
     STDMETHOD(QueryInterface)(REFIID riid, void** ppv) noexcept
     {
@@ -359,7 +702,13 @@ public:
             return CLASS_E_NOAGGREGATION;
         }
 
-        ThumbProviderSVG* inst = new ThumbProviderSVG();
+        IUnknown* inst;
+        if (this->type == Class_PreviewHandler) {
+            inst = static_cast<IPreviewHandler*>(new PreviewHandlerSVG());
+        } else {
+            inst = static_cast<IThumbnailProvider*>(new ThumbProviderSVG());
+        }
+
         HRESULT hr = inst != nullptr ? S_OK : E_OUTOFMEMORY;
         if (SUCCEEDED(hr)) {
             hr = inst->QueryInterface(riid, ppv);
@@ -408,10 +757,15 @@ bool IsBlackListed()
 
 
 #define String_CLSID_ThumbProviderSVG "{C9148B50-E15E-440d-A07F-CF385EC73914}"
+#define String_CLSID_PreviewHandlerSVG "{9CDB270D-CB17-4d54-8F4F-7A9AE2D68392}"
 
 // {C9148B50-E15E-440d-A07F-CF385EC73914}
 //DEFINE_GUID(CLSID_ThumbProviderSVG, 0xc9148b50, 0xe15e, 0x440d, 0xa0, 0x7f, 0xcf, 0x38, 0x5e, 0xc7, 0x39, 0x14);
 const GUID CLSID_ThumbProviderSVG = { 0xc9148b50, 0xe15e, 0x440d, { 0xa0, 0x7f, 0xcf, 0x38, 0x5e, 0xc7, 0x39, 0x14 } };
+
+// {9CDB270D-CB17-4d54-8F4F-7A9AE2D68392}
+//DEFINE_GUID(CLSID_PreviewHandlerSVG, 0x9cdb270d, 0xcb17, 0x4d54, 0x8f, 0x4f, 0x7a, 0x9a, 0xe2, 0xd6, 0x83, 0x92);
+const GUID CLSID_PreviewHandlerSVG = { 0x9cdb270d, 0xcb17, 0x4d54, { 0x8f, 0x4f, 0x7a, 0x9a, 0xe2, 0xd6, 0x83, 0x92 } };
 
 extern "C"
 {
@@ -428,7 +782,12 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv)
     }
     *ppv = nullptr;
 
-    if (IsEqualCLSID(rclsid, CLSID_ThumbProviderSVG) == FALSE) {
+    ClassType type;
+    if (IsEqualCLSID(rclsid, CLSID_ThumbProviderSVG)) {
+        type = Class_ThumbProvider;
+    } else if (IsEqualCLSID(rclsid, CLSID_PreviewHandlerSVG)) {
+        type = Class_PreviewHandler;
+    } else {
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
@@ -436,7 +795,7 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv)
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
-    ClassFactory* inst = new ClassFactory();
+    ClassFactory* inst = new ClassFactory(type);
     HRESULT hr = inst != nullptr ? S_OK : E_OUTOFMEMORY;
     if (SUCCEEDED(hr)) {
         hr = inst->QueryInterface(riid, ppv);
@@ -467,15 +826,25 @@ STDAPI DllInstall(BOOL install, LPCWSTR cmdLine)
         hr = regInstall != nullptr ? S_OK : ResultFromLastError();
     }
     if (SUCCEEDED(hr)) {
-        char desc[128];
-        hr = ::LoadStringA(HINST_THISCOMPONENT, IDS_DESC, desc, ARRAYSIZE(desc)) > 0 ? S_OK : HRESULT_FROM_WIN32(::GetLastError());
-        char clsid[] = String_CLSID_ThumbProviderSVG;
-        char k_clsid[] = "CLSID_ThisDLL";
-        char k_desc[] = "DESC_ThisDLL";
+        char descThump[128], descPreview[128];
+        if (::LoadStringA(HINST_THISCOMPONENT, IDS_DESC_THUMBNAIL, descThump, ARRAYSIZE(descThump)) <= 0) {
+            strcpy_s(descThump, "?");
+        }
+        if (::LoadStringA(HINST_THISCOMPONENT, IDS_DESC_PREVIEW, descPreview, ARRAYSIZE(descPreview)) <= 0) {
+            strcpy_s(descPreview, "?");
+        }
+        char clsidThump[] = String_CLSID_ThumbProviderSVG;
+        char clsidPreview[] = String_CLSID_PreviewHandlerSVG;
+        char k_clsidThump[] = "CLSID_ThumbProvider";
+        char k_clsidPreview[] = "CLSID_PreviewHandler";
+        char k_descThump[] = "DESC_ThumbProvider";
+        char k_descPreview[] = "DESC_PreviewHandler";
         STRENTRYA ase[] =
         {
-            { k_clsid,  clsid },
-            { k_desc,   desc },
+            { k_clsidThump, clsidThump },
+            { k_clsidPreview, clsidPreview },
+            { k_descThump, descThump },
+            { k_descPreview, descPreview },
         };
         const STRTABLEA table = { ARRAYSIZE(ase), ase };
         hr = regInstall(HINST_THISCOMPONENT, install ? "RegDll" : "UnregDll", &table);

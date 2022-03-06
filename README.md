@@ -37,7 +37,7 @@ nmake
 
 ## Todos
 - [ ] Installer
-- [ ] Implement [IPreviewHandler](https://docs.microsoft.com/en-nz/windows/desktop/shell/preview-handlers)
+- [X] Implement [IPreviewHandler](https://docs.microsoft.com/en-nz/windows/desktop/shell/preview-handlers)
 - [ ] Implement [IQueryInfo](https://docs.microsoft.com/en-us/windows/desktop/api/shlobj_core/nn-shlobj_core-iqueryinfo)
 - [X] Implement [IPropertyStore](https://docs.microsoft.com/en-us/windows/win32/api/propsys/nn-propsys-ipropertystore)
 

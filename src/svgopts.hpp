@@ -148,7 +148,7 @@ public:
         return *this;
     }
 
-    bool GetWorkaround() const
+    bool GetWorkaround() const noexcept
     {
         return this->workaround;
     }

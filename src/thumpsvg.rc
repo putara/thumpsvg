@@ -1,5 +1,6 @@
 // resource
-#define IDS_DESC                1
+#define IDS_DESC_THUMBNAIL      1
+#define IDS_DESC_PREVIEW        2
 
 #define VER_NUMBER              1, 0, 2, 4
 #define VER_STRING              "1, 0, 2, 4"
@@ -20,7 +21,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_NZ
 
 STRINGTABLE DISCARDABLE
 {
-    IDS_DESC "Thumbnail Provider for SVG Shell Extension"
+    IDS_DESC_THUMBNAIL "Thumbnail Provider for SVG Shell Extension"
+    IDS_DESC_PREVIEW "Preview Handler for SVG Shell Extension"
 }
 
 VS_VERSION_INFO VERSIONINFO DISCARDABLE

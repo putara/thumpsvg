@@ -7,22 +7,41 @@ AddReg=Sys.reg
 AdvOptions=260
 DelReg=Sys.delreg
 [Sys.reg]
-HKCR,"CLSID\%CLSID_ThisDLL%",,,"%DESC_ThisDLL%"
-HKCR,"CLSID\%CLSID_ThisDLL%\InProcServer32",,,"%_MOD_PATH%"
-HKCR,"CLSID\%CLSID_ThisDLL%\InProcServer32","ThreadingModel",,"Apartment"
-HKCR,".svg\%SHELLEXTPKEY%",,,"%CLSID_ThisDLL%"
-HKCR,".svgz\%SHELLEXTPKEY%",,,"%CLSID_ThisDLL%"
-HKLM,"%SMWCVSEA%","%CLSID_ThisDLL%",,"%DESC_ThisDLL%"
-HKLM,"%SMWCVPSPH%\.svg",,,"%CLSID_ThisDLL%"
-HKLM,"%SMWCVPSPH%\.svgz",,,"%CLSID_ThisDLL%"
+; Thumbnail Provider
+HKCR,"CLSID\%CLSID_ThumbProvider%",,,"%DESC_ThumbProvider%"
+HKCR,"CLSID\%CLSID_ThumbProvider%\InProcServer32",,,"%_MOD_PATH%"
+HKCR,"CLSID\%CLSID_ThumbProvider%\InProcServer32","ThreadingModel",,"Apartment"
+HKCR,".svg\%SHELLEXTPKEY%",,,"%CLSID_ThumbProvider%"
+HKCR,".svgz\%SHELLEXTPKEY%",,,"%CLSID_ThumbProvider%"
+HKLM,"%SMWCVSEA%","%CLSID_ThumbProvider%",,"%DESC_ThumbProvider%"
+; Property Handler
+HKLM,"%SMWCVPSPH%\.svg",,,"%CLSID_ThumbProvider%"
+HKLM,"%SMWCVPSPH%\.svgz",,,"%CLSID_ThumbProvider%"
+; Preview Handler
+HKCR,"CLSID\%CLSID_PreviewHandler%",,,"%DESC_PreviewHandler%"
+HKCR,"CLSID\%CLSID_PreviewHandler%","AppID",,"{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}"
+HKCR,"CLSID\%CLSID_PreviewHandler%\InProcServer32",,,"%_MOD_PATH%"
+HKCR,"CLSID\%CLSID_PreviewHandler%\InProcServer32","ThreadingModel",,"Apartment"
+HKCR,".svg\%SHELLEXTPVKEY%",,,"%CLSID_PreviewHandler%"
+HKCR,".svgz\%SHELLEXTPVKEY%",,,"%CLSID_PreviewHandler%"
+HKLM,"%SMWCVPVH%","%CLSID_PreviewHandler%",,"%DESC_PreviewHandler%"
 [Sys.delreg]
-HKCR,"CLSID\%CLSID_ThisDLL%"
+; Thumbnail Provider
+HKCR,"CLSID\%CLSID_ThumbProvider%"
 HKCR,".svg\%SHELLEXTPKEY%"
 HKCR,".svgz\%SHELLEXTPKEY%"
-HKLM,"%SMWCVSEA%","%CLSID_ThisDLL%"
+HKLM,"%SMWCVSEA%","%CLSID_ThumbProvider%"
+; Property Handler
 HKLM,"%SMWCVPSPH%\.svg"
 HKLM,"%SMWCVPSPH%\.svgz"
+; Preview Handler
+HKCR,"CLSID\%CLSID_PreviewHandler%"
+HKCR,".svg\%SHELLEXTPVKEY%"
+HKCR,".svgz\%SHELLEXTPVKEY%"
+HKLM,"%SMWCVPVH%","%CLSID_PreviewHandler%"
 [Strings]
 SMWCVSEA="Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"
 SMWCVPSPH="Software\Microsoft\Windows\CurrentVersion\PropertySystem\PropertyHandlers"
+SMWCVPVH="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers"
 SHELLEXTPKEY="ShellEx\{e357fccd-a995-4576-b01f-234630154e96}"
+SHELLEXTPVKEY="ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}"

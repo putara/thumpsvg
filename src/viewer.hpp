@@ -18,12 +18,15 @@ constexpr UINT SVGWM_CLOSE             = SVGWM_FIRST + 8;
 constexpr UINT SVGWM_EXPORT            = SVGWM_FIRST + 9;
 constexpr UINT SVGWM_DPI_CHANGED       = SVGWM_FIRST + 10;
 constexpr UINT SVGWM_REFRESH           = SVGWM_FIRST + 11;
+constexpr UINT SVGWM_LOAD_MEMORY       = SVGWM_FIRST + 12;
 
 // SVGWM_GET_OPTION/SVGWM_SET_OPTION
 constexpr UINT SVGOPT_ZOOM             = 1;
 constexpr UINT SVGOPT_VIEWBOX          = 2;
 constexpr UINT SVGOPT_BBOX             = 3;
 constexpr UINT SVGOPT_SPEED            = 4;
+constexpr UINT SVGOPT_BACKMODE         = 5;
+constexpr UINT SVGOPT_BACKCOLOUR       = 6;
 
 // SVGOPT_ZOOM
 constexpr int SVGZOOM_CONTAIN          = -1;
@@ -34,6 +37,9 @@ constexpr UINT SVGEXP_PNG              = 0;
 constexpr UINT SVGEXP_BMP              = 1;
 constexpr UINT SVGEXP_GIF              = 2;
 
+// SVGOPT_BACKMODE
+constexpr UINT SVGBGM_CHECKER          = 0;
+constexpr UINT SVGBGM_SOLID            = 1;
 
 struct SvgSizeF
 {
@@ -95,6 +101,11 @@ public:
         return this->SendMessageHresult(SVGWM_LOAD, 0, reinterpret_cast<LPARAM>(path));
     }
 
+    HRESULT LoadFromMemory(const void* ptr, ULONG cb)
+    {
+        return this->SendMessageHresult(SVGWM_LOAD_MEMORY, cb, reinterpret_cast<LPARAM>(ptr));
+    }
+
     HRESULT CloseFile()
     {
         return this->SendMessageHresult(SVGWM_CLOSE, 0, 0);
@@ -131,6 +142,16 @@ public:
     HRESULT SetSpeedOverQuality(bool enabled)
     {
         return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_SPEED, enabled);
+    }
+
+    HRESULT SetBackgroundMode(UINT mode)
+    {
+        return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_BACKMODE, mode);
+    }
+
+    HRESULT SetBackgroundColour(COLORREF colour)
+    {
+        return this->SendMessageHresult(SVGWM_SET_OPTION, SVGOPT_BACKCOLOUR, colour);
     }
 
     void DpiChanged()

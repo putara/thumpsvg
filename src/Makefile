@@ -85,3 +85,4 @@ cleanobjonly:
  $(RC) $(RFLAGS) /fo$@ $<
 
 !include "build.dep"
+thumpsvg.rc: res/reginst.inf

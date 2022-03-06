@@ -16,6 +16,8 @@ private:
     bool showViewBox = false;
     bool showBBox = false;
     bool speedOverQuality = false;
+    UINT backMode = SVGBGM_CHECKER;
+    COLORREF backColour = CLR_NONE;
     int zoom = SVGZOOM_CONTAIN;
 
     SvgViewerImpl(HWND hwnd) noexcept
@@ -106,17 +108,19 @@ private:
         return oldValue ? S_OK : S_FALSE;
     }
 
-    HRESULT UpdateIntValue(HWND hwnd, LPARAM value, int* param)
+    template <typename T>
+    HRESULT UpdateIntValue(HWND hwnd, LPARAM value, T* param)
     {
-        int oldValue = *param;
-        int newValue = static_cast<int>(value);
+        T oldValue = *param;
+        T newValue = static_cast<T>(value);
         if (oldValue != newValue) {
             *param = newValue;
             if (this->svg.IsNull() == false) {
                 this->Invalidate(hwnd);
             }
+            return S_OK;
         }
-        return oldValue ? S_OK : S_FALSE;
+        return S_FALSE;
     }
 
     static LRESULT LR(bool x)
@@ -143,14 +147,20 @@ public:
         }
 
         HDC hdc = ps.hdc;
-        if (!this->checker.IsNull()) {
+        if (this->backMode == SVGBGM_CHECKER && !this->checker.IsNull()) {
             COLORREF oldBg = ::SetBkColor(hdc, 0xdddddd);
             COLORREF oldFg = ::SetTextColor(hdc, 0xaaaaaa);
             ::FillRect(hdc, &rect, this->checker.GetHbrush());
             ::SetBkColor(hdc, oldBg);
             ::SetTextColor(hdc, oldFg);
         } else {
-            ::FillRect(hdc, &rect, static_cast<HBRUSH>(IntToPtr(COLOR_WINDOW + 1)));
+            COLORREF colour = this->backColour;
+            if (colour == CLR_NONE) {
+                colour = ::GetSysColor(COLOR_WINDOW);
+            }
+            COLORREF oldColour = ::SetDCBrushColor(hdc, colour);
+            ::FillRect(hdc, &rect, GetStockBrush(DC_BRUSH));
+            ::SetDCBrushColor(hdc, oldColour);
         }
 
         if (!this->cache.IsNull()) {
@@ -354,6 +364,16 @@ public:
         return hr;
     }
 
+    HRESULT OnSvgLoadFromMemory(HWND hwnd, UINT_PTR size, const void* data)
+    {
+        SvgOptions opt;
+        opt.LoadSystemFonts();
+        opt.SetSpeedOverQuality(this->speedOverQuality);
+        HRESULT hr = this->svg.Load(data, size, opt);
+        this->Invalidate(hwnd, true);
+        return hr;
+    }
+
     HRESULT OnSvgClose(HWND hwnd)
     {
         this->svg.Destroy();
@@ -453,6 +473,7 @@ public:
     HRESULT OnSvgGetOption(HWND, UINT option, LPARAM lParam)
     {
         int* uparam;
+        COLORREF* cparam;
         switch (option) {
         case SVGOPT_ZOOM:
             uparam = reinterpret_cast<int*>(lParam);
@@ -467,6 +488,20 @@ public:
             return this->showBBox ? S_OK : S_FALSE;
         case SVGOPT_SPEED:
             return this->speedOverQuality ? S_OK : S_FALSE;
+        case SVGOPT_BACKMODE:
+            uparam = reinterpret_cast<int*>(lParam);
+            if (uparam == nullptr) {
+                return E_POINTER;
+            }
+            *uparam = this->backMode;
+            return S_OK;
+        case SVGOPT_BACKCOLOUR:
+            cparam = reinterpret_cast<COLORREF*>(lParam);
+            if (cparam == nullptr) {
+                return E_POINTER;
+            }
+            *cparam = this->backColour;
+            return S_OK;
         }
         UNREFERENCED_PARAMETER(lParam);
         return E_INVALIDARG;
@@ -486,6 +521,13 @@ public:
             return this->UpdateBoolValue(hwnd, lParam, &this->showBBox);
         case SVGOPT_SPEED:
             return this->UpdateBoolValue(hwnd, lParam, &this->speedOverQuality);
+        case SVGOPT_BACKMODE:
+            if (lParam == SVGBGM_CHECKER || lParam == SVGBGM_SOLID) {
+                return this->UpdateIntValue(hwnd, lParam, &this->backMode);
+            }
+            break;
+        case SVGOPT_BACKCOLOUR:
+            return this->UpdateIntValue(hwnd, lParam, &this->backColour);
         }
         return E_INVALIDARG;
     }
@@ -521,6 +563,8 @@ public:
             return LR(this->OnSvgDpiChanged(hwnd));
         case SVGWM_REFRESH:
             return LR(this->OnSvgRefresh(hwnd));
+        case SVGWM_LOAD_MEMORY:
+            return LR(this->OnSvgLoadFromMemory(hwnd, wParam, reinterpret_cast<void*>(lParam)));
         }
         return __super::WindowProc(hwnd, message, wParam, lParam);
     }
