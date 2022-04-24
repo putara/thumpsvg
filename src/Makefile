@@ -39,6 +39,12 @@ RFLAGS = /l 0 /d "NDEBUG" /d "$(CDEFRT)"
 CDEFS = /D "NDEBUG" /D "_WINDOWS" /D "UNICODE" /D "_UNICODE" /D "$(CDEFRT)" /I "$(INCDIR)"
 LDLIBS = kernel32.lib user32.lib gdi32.lib comdlg32.lib comctl32.lib shell32.lib shlwapi.lib ole32.lib windowscodecs.lib uxtheme.lib dwmapi.lib ws2_32.lib advapi32.lib userenv.lib pathcch.lib
 
+!ifdef debug
+!if $(debug)
+CDEFS = /D "DEBUG" /D "_DEBUG" $(CDEFS)
+!endif
+!endif
+
 all: "$(OBJDIR)" "$(OUTDIR)" "$(SHLEXT_DLL)" "$(VIEWER_EXE)"
 
 clean: cleanobj
